@@ -43,9 +43,11 @@
       </div>
     </noscript>
     <div id="wgc-analysis"></div>
+    <!-- Relative endpoint: this page is always served from the same origin
+         as the hooks (wgcassetguide.com in prod, localhost:8080 in dev). -->
     <script src="/embed.js" async
       data-widget="rental-analysis"
-      data-endpoint="https://wgcassetguide.com/hook"
+      data-endpoint="/hook"
       data-source="Website - wgcassetguide"></script>
   </main>
 </body>

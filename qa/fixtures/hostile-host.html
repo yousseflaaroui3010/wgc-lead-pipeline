@@ -41,10 +41,13 @@
         'PII-free key check: ' + (ok ? 'PASS' : 'FAIL');
     });
   </script>
-  <!-- Point data-endpoint at staging when executing the checklist. -->
-  <script src="https://wgcassetguide.com/embed.js" async
+  <!-- Relative URLs so this works served from dev nginx
+       (http://localhost:8080/hostile-host.html). For the cross-origin
+       staging run of G-5/G-7, host a copy elsewhere and replace both with
+       absolute https://wgcassetguide.com URLs (the Goodjuju snippet). -->
+  <script src="/embed.js" async
     data-widget="rental-analysis"
-    data-endpoint="https://wgcassetguide.com/hook"
+    data-endpoint="/hook"
     data-source="Website - wgcassetguide"></script>
 </body>
 </html>
