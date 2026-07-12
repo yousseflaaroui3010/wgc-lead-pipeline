@@ -29,6 +29,9 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto,fs
+      # Newer n8n blocks $env in nodes by default; our workflows read their
+      # config (secret, mail addresses) from env on purpose.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_SECURE_COOKIE=false # editor over plain http://localhost
       - WGC_HMAC_SECRET=dev-only-hmac-secret-not-for-prod
       - LEADSIMPLE_API_KEY=

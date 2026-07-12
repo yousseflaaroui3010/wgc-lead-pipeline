@@ -47,6 +47,9 @@ services:
       - EXECUTIONS_DATA_MAX_AGE=168
       # Code nodes need crypto (token HMAC) and fs (mapping + metrics).
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto,fs
+      # Workflows read config (WGC_HMAC_SECRET, mail addresses) via $env;
+      # newer n8n blocks that by default. Confirmed needed 2026-07-12 (dev).
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - WGC_HMAC_SECRET=${WGC_HMAC_SECRET}
       - LEADSIMPLE_API_KEY=${LEADSIMPLE_API_KEY:-}
       - PARSE_ADDRESS=${PARSE_ADDRESS}
