@@ -1,0 +1,18 @@
+{
+  "name": "wgc-lead-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Westrom Group free rental analysis form widget + n8n lead pipeline (PRD-02 v1.1)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node widget/build.mjs",
+    "test": "node --test widget/test/validate.test.mjs widget/test/api.test.mjs",
+    "check": "npm run test && npm run build"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
