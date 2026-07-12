@@ -23,8 +23,10 @@ verify each Code node still shows its script afterwards).**
    `/home/node/.n8n/wgc/leadsimple-map.json` (the compose file mounts
    `n8n/mapping/` there read-only — edits on the host take effect on the
    next lead).
-7. Activate all four workflows (static-data dedupe only persists for
-   **active** production executions).
+7. **Publish** all four workflows (n8n 2.0 replaced the Active toggle with
+   a Publish button, top-right / Shift+P; confirmed on 2.29.10, 2026-07-12).
+   Re-publish after every edit — saved-but-unpublished changes are not live.
+   Static-data dedupe only persists for published production executions.
 
 ## Environment contract (set in `infra/.env`)
 

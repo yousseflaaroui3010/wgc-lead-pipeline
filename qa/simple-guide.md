@@ -119,9 +119,17 @@ doors. The doors need the right names:
    find **Error Workflow** → pick **WF-3 Monitors** → Save.
 2. Do the same inside **WF-2**.
 
-**Step 7 — switch everything on.** Each workflow has an
-**Inactive/Active** switch at the top. Open all 4 and flip each one to
-**Active**. This matters — nothing works while they're off.
+**Step 7 — publish everything.** (n8n 2.0 removed the old on/off switch.)
+Open each of the 4 workflows and click the **Publish** button in the very
+top-right corner (or press **Shift+P**). A small window opens — just click
+**Publish** inside it. Nothing works until a workflow is published.
+
+Important forever-rule: any time you CHANGE a workflow later, saving is not
+enough — click **Publish** again or the change won't be live.
+
+Never use the **"Execute workflow"** button at the bottom — that's a
+practice mode that waits at a different address and just hangs. Test with
+the real form instead (Part 3).
 
 Setup done. You never have to do Part 2 again.
 
@@ -231,8 +239,11 @@ In the terminal run `docker compose -f docker-compose.dev.yml ps`
 If one doesn't: `docker compose -f docker-compose.dev.yml restart`.
 
 **Form shows "Something went wrong" when you submit:**
-1. Most common: the workflows aren't switched to **Active** (Part 2,
-   Step 7), or the Path names have a typo (Part 2, Step 4). Check both.
+1. Most common: the workflows aren't **Published** (Part 2, Step 7) — or
+   were changed and not re-published — or the Path names have a typo
+   (Part 2, Step 4). Check both. Quick door test in the terminal:
+   `curl http://localhost:8080/hook/token` should print a long scrambled
+   string, not `{"ok":true}`.
 2. Also: did you submit within 2 seconds of the page loading, more than
    6 times in a minute, or leave the tab open a long time? You looked
    like a robot. Wait a minute, reload the page, try again slowly.
