@@ -249,10 +249,12 @@ If one doesn't: `docker compose -f docker-compose.dev.yml restart`.
    like a robot. Wait a minute, reload the page, try again slowly.
 
 **You see "Request received" but no emails in the mailbox:**
-Go to n8n (localhost:5678) → click **Executions** (left side). Find the
-red (failed) run and click it. The box that's red is the broken step —
-90% of the time it's an email box that doesn't have the `WGC SMTP`
-credential picked (Part 2, Step 3.6).
+90% of the time an email box doesn't have `WGC SMTP` picked in its
+Credential dropdown — check all 5 email boxes (2 in WF-2, 3 in WF-3) —
+**and then re-Publish both workflows** (picking it without publishing
+changes nothing). To find other causes: n8n (localhost:5678) →
+**Executions** (left side) → click the red run → the red box is the
+broken step.
 
 **n8n's Executions list is empty after a submit:**
 The form's message never reached n8n — the door names don't match.
