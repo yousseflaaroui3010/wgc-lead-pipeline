@@ -1,0 +1,103 @@
+{
+  "name": "WF-2 Delivery Router",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "wf2-trigger",
+      "name": "From WF-1",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Primary path: LeadSimple REST via the mapping adapter (ADR-4). All CRM\n// specifics live in leadsimple-map.json; when the admin key arrives only\n// that file changes. Retries 3x with 2s/8s/30s backoff (S2 spec), 10s\n// timeout per attempt so a slow CRM can never stall the queue.\n// Requires NODE_FUNCTION_ALLOW_BUILTIN=fs.\nconst fs = require('fs');\nconst MAP_PATH = '/home/node/.n8n/wgc/leadsimple-map.json';\nconst payload = $json.payload;\nif (!payload || !payload.submission_id) throw new Error('WF-2 called without a canonical payload'); // fail loud\n\nlet map = { enabled: false };\ntry { map = JSON.parse(fs.readFileSync(MAP_PATH, 'utf8')); } catch (e) { /* adapter absent -> fallback path */ }\n\n// Render the email-parse body (exact S2 template) up front; both the\n// fallback email and the notification email reuse it.\nfunction nv(v) { return v === null || v === undefined ? '' : String(v); }\nconst emailText = [\n  'First Name: ' + nv(payload.first_name),\n  'Last Name: ' + nv(payload.last_name),\n  'Email: ' + nv(payload.email),\n  'Phone: ' + nv(payload.phone),\n  'Property Address: ' + nv(payload.property_address),\n  'Beds: ' + nv(payload.beds) + '    Baths: ' + nv(payload.baths),\n  'Message: ' + nv(payload.message),\n  'Source: ' + nv(payload.source),\n  'TCPA Consent: ' + nv(payload.consent.tcpa),\n  'Consent Timestamp: ' + nv(payload.consent.timestamp),\n  'Consent Text Version: ' + nv(payload.consent.text_version),\n  'Submission ID: ' + nv(payload.submission_id)\n].join('\\n');\n\nlet deliveredApi = false;\nlet apiError = '';\nif (map.enabled === true && map.url) {\n  // Map canonical fields -> CRM fields via the adapter's field_map.\n  const crmBody = {};\n  for (const [ours, theirs] of Object.entries(map.field_map || {})) {\n    const path = ours.split('.');\n    let val = payload;\n    for (const seg of path) val = val == null ? null : val[seg];\n    crmBody[theirs] = val;\n  }\n  Object.assign(crmBody, map.static_fields || {});\n  const headers = { 'Content-Type': 'application/json' };\n  if (map.auth_header) headers[map.auth_header] = $env.LEADSIMPLE_API_KEY;\n  const backoff = [2000, 8000, 30000];\n  for (let attempt = 0; attempt < 3 && !deliveredApi; attempt++) {\n    try {\n      await this.helpers.httpRequest({ method: 'POST', url: map.url, headers, body: crmBody, json: true, timeout: 10000 });\n      deliveredApi = true;\n    } catch (e) {\n      apiError = String(e.message || e);\n      if (attempt < 2) await new Promise(function (r) { setTimeout(r, backoff[attempt]); });\n    }\n  }\n}\n\nreturn [{ json: {\n  delivered_api: deliveredApi,\n  api_error: apiError,\n  email_text: emailText,\n  submission_id: payload.submission_id,\n  lead_name: payload.first_name + ' ' + payload.last_name\n} }];"
+      },
+      "id": "wf2-api",
+      "name": "CRM API attempt (mapped)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.delivered_api }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "wf2-if",
+      "name": "API failed or disabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $env.PARSE_ADDRESS }}",
+        "subject": "New Lead - Free Rental Analysis",
+        "emailFormat": "text",
+        "text": "={{ $json.email_text }}",
+        "options": {}
+      },
+      "id": "wf2-parse-mail",
+      "name": "Fallback: email-parse path",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, -120],
+      "credentials": { "smtp": { "id": "SET-AFTER-IMPORT", "name": "WGC SMTP" } },
+      "notes": "LeadSimple per-Source parse address: plain text, one field per line (G-2). Transactional relay only (S3-D3)."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $env.NOTIFY_EMAILS }}",
+        "subject": "=New rental analysis lead: {{ $json.lead_name }}",
+        "emailFormat": "text",
+        "text": "=A new free rental analysis request just arrived.\n\n{{ $json.email_text }}\n\nDelivery: {{ $json.delivered_api ? 'CRM API (primary)' : 'email-parse fallback' }}",
+        "options": {}
+      },
+      "id": "wf2-notify",
+      "name": "Notify Jon + Ashley + Youssef",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [880, 0],
+      "credentials": { "smtp": { "id": "SET-AFTER-IMPORT", "name": "WGC SMTP" } },
+      "notes": "FR-6: within 60s of submission. Also the tertiary delivery path (full lead body included)."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Record which path delivered (feeds WF-3 weekly export, instrument I1).\nconst fs = require('fs');\nconst METRICS = '/home/node/.n8n/wgc-metrics.json';\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync(METRICS, 'utf8')); } catch (e) { /* first run */ }\nconst day = new Date().toISOString().slice(0, 10);\nm.days[day] = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nm.days[day][$json.delivered_api ? 'delivered_api' : 'delivered_email'] += 1;\nfs.writeFileSync(METRICS, JSON.stringify(m));\nreturn [{ json: { delivered: true, submission_id: $json.submission_id } }];"
+      },
+      "id": "wf2-mark",
+      "name": "Mark delivered",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    }
+  ],
+  "connections": {
+    "From WF-1": { "main": [[{ "node": "CRM API attempt (mapped)", "type": "main", "index": 0 }]] },
+    "CRM API attempt (mapped)": { "main": [[{ "node": "API failed or disabled?", "type": "main", "index": 0 }]] },
+    "API failed or disabled?": {
+      "main": [
+        [{ "node": "Fallback: email-parse path", "type": "main", "index": 0 }],
+        [{ "node": "Notify Jon + Ashley + Youssef", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fallback: email-parse path": { "main": [[{ "node": "Notify Jon + Ashley + Youssef", "type": "main", "index": 0 }]] },
+    "Notify Jon + Ashley + Youssef": { "main": [[{ "node": "Mark delivered", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "SET-AFTER-IMPORT-WF3-ID"
+  },
+  "pinData": {}
+}

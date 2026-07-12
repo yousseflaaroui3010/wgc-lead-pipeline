@@ -1,0 +1,48 @@
+{
+  "name": "WF-0 Token Issuer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "REPLACE-HOOK-ID/token",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wf0-webhook",
+      "name": "GET /token",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "wf0-token-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ADR-2: stateless render token = base64(ts.nonce.HMAC_SHA256(secret, ts.nonce)).\n// Requires NODE_FUNCTION_ALLOW_BUILTIN=crypto and WGC_HMAC_SECRET in the environment.\nconst crypto = require('crypto');\nconst secret = $env.WGC_HMAC_SECRET;\nif (!secret) throw new Error('WGC_HMAC_SECRET is not set'); // fail loud, never issue unsigned tokens\nconst ts = String(Date.now());\nconst nonce = crypto.randomBytes(8).toString('hex');\nconst mac = crypto.createHmac('sha256', secret).update(ts + '.' + nonce).digest('hex');\nconst token = Buffer.from(ts + '.' + nonce + '.' + mac, 'utf8').toString('base64');\nreturn [{ json: { token } }];"
+      },
+      "id": "wf0-code",
+      "name": "Issue HMAC token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.token }}",
+        "options": {}
+      },
+      "id": "wf0-respond",
+      "name": "Respond token",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [440, 0]
+    }
+  ],
+  "connections": {
+    "GET /token": { "main": [[{ "node": "Issue HMAC token", "type": "main", "index": 0 }]] },
+    "Issue HMAC token": { "main": [[{ "node": "Respond token", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

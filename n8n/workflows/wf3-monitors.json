@@ -1,0 +1,130 @@
+{
+  "name": "WF-3 Monitors",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "wf3-error",
+      "name": "Any workflow errored",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, -240]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[WGC ALERT] workflow error: {{ $json.workflow.name }}",
+        "emailFormat": "text",
+        "text": "=Workflow {{ $json.workflow.name }} failed.\n\nError: {{ $json.execution.error.message }}\nNode: {{ $json.execution.lastNodeExecuted }}\nExecution: {{ $json.execution.url }}\n\nIf this is WF-2, a lead may be undelivered - check the execution and the parse-path inbox now.",
+        "options": {}
+      },
+      "id": "wf3-error-mail",
+      "name": "Error alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [220, -240],
+      "credentials": { "smtp": { "id": "SET-AFTER-IMPORT", "name": "WGC SMTP" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 18 * * *" }]
+        }
+      },
+      "id": "wf3-daily",
+      "name": "Daily 18:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Container TZ is America/Chicago (compose GENERIC_TIMEZONE)."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Zero-submission-day check (PRD NFR-Reliability): a silently broken form\n// looks exactly like a quiet day, so alert on zero and let a human look.\nconst fs = require('fs');\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync('/home/node/.n8n/wgc-metrics.json', 'utf8')); } catch (e) { /* no traffic ever */ }\nconst day = new Date().toISOString().slice(0, 10);\nconst d = m.days[day] || { submissions: 0, bots: 0 };\nreturn [{ json: { day, submissions: d.submissions, bots: d.bots, quiet: d.submissions === 0 } }];"
+      },
+      "id": "wf3-daily-check",
+      "name": "Count today",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.quiet }}", "value2": true }]
+        }
+      },
+      "id": "wf3-daily-if",
+      "name": "Zero today?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "[WGC ALERT] zero submissions today - form may be silently broken",
+        "emailFormat": "text",
+        "text": "=No form submissions recorded since 00:00 on {{ $json.day }} (bot rejects: {{ $json.bots }}).\n\nRun the smoke test: submit the staging form and confirm a WF-1 execution appears.",
+        "options": {}
+      },
+      "id": "wf3-daily-mail",
+      "name": "Quiet-day alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, -60],
+      "credentials": { "smtp": { "id": "SET-AFTER-IMPORT", "name": "WGC SMTP" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1" }]
+        }
+      },
+      "id": "wf3-weekly",
+      "name": "Weekly Mon 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 240]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Weekly conversion-log export (instrument I1): submissions, delivered-path\n// split, bot rejects for the last 7 days. Counts only - never PII.\nconst fs = require('fs');\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync('/home/node/.n8n/wgc-metrics.json', 'utf8')); } catch (e) { /* no data */ }\nconst lines = [];\nconst totals = { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nfor (let i = 7; i >= 1; i--) {\n  const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);\n  const d = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\n  lines.push(day + '  submissions=' + d.submissions + '  api=' + d.delivered_api + '  email=' + d.delivered_email + '  bots=' + d.bots);\n  for (const k of Object.keys(totals)) totals[k] += d[k] || 0;\n}\nlines.push('');\nlines.push('WEEK TOTAL  submissions=' + totals.submissions + '  api=' + totals.delivered_api + '  email=' + totals.delivered_email + '  bots=' + totals.bots);\nreturn [{ json: { report: lines.join('\\n') } }];"
+      },
+      "id": "wf3-weekly-report",
+      "name": "Build I1 export",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 240]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "[WGC] weekly conversion log (instrument I1)",
+        "emailFormat": "text",
+        "text": "={{ $json.report }}",
+        "options": {}
+      },
+      "id": "wf3-weekly-mail",
+      "name": "Send I1 export",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [440, 240],
+      "credentials": { "smtp": { "id": "SET-AFTER-IMPORT", "name": "WGC SMTP" } }
+    }
+  ],
+  "connections": {
+    "Any workflow errored": { "main": [[{ "node": "Error alert", "type": "main", "index": 0 }]] },
+    "Daily 18:00": { "main": [[{ "node": "Count today", "type": "main", "index": 0 }]] },
+    "Count today": { "main": [[{ "node": "Zero today?", "type": "main", "index": 0 }]] },
+    "Zero today?": { "main": [[{ "node": "Quiet-day alert", "type": "main", "index": 0 }], []] },
+    "Weekly Mon 08:00": { "main": [[{ "node": "Build I1 export", "type": "main", "index": 0 }]] },
+    "Build I1 export": { "main": [[{ "node": "Send I1 export", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

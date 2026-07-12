@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA fixture: hostile host page (G-5, G-7)</title>
+  <style>
+    /* G-7: host CSS actively attacks form elements. The widget's inputs
+       must be visually unchanged inside its shadow root. */
+    input { border: 5px dashed red !important; background: yellow !important; }
+    label { color: lime !important; font-size: 40px !important; }
+    button { display: none !important; }
+    * { font-family: "Comic Sans MS", cursive !important; letter-spacing: 6px !important; }
+  </style>
+</head>
+<body>
+  <h1>Hostile host page</h1>
+  <p>Native input below must look broken (red dashed border) — the widget's must not:</p>
+  <input placeholder="host page input (should look awful)">
+
+  <div id="wgc-analysis">
+    <!-- FR-9: blocked-script fallback content, replaced on mount -->
+    <a href="https://wgcassetguide.com/analysis">Request your free rental analysis</a>
+  </div>
+
+  <h2>Event log (G-5)</h2>
+  <pre id="event-log">waiting for wgc-lead-submitted…</pre>
+
+  <script>
+    // G-5: listener on window; the event must arrive composed with a detail
+    // of exactly {source, submission_id} — nothing PII-shaped.
+    window.dataLayer = [];
+    window.addEventListener('wgc-lead-submitted', function (e) {
+      var keys = Object.keys(e.detail || {}).sort();
+      var ok = keys.join(',') === 'source,submission_id';
+      document.getElementById('event-log').textContent =
+        'received wgc-lead-submitted\n' +
+        'detail keys: ' + keys.join(', ') + '\n' +
+        'composed: ' + e.composed + '\n' +
+        'dataLayer entries: ' + JSON.stringify(window.dataLayer) + '\n' +
+        'PII-free key check: ' + (ok ? 'PASS' : 'FAIL');
+    });
+  </script>
+  <!-- Point data-endpoint at staging when executing the checklist. -->
+  <script src="https://wgcassetguide.com/embed.js" async
+    data-widget="rental-analysis"
+    data-endpoint="https://wgcassetguide.com/hook"
+    data-source="Website - wgcassetguide"></script>
+</body>
+</html>

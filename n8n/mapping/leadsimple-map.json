@@ -1,0 +1,22 @@
+{
+  "_comment": "ADR-4 schema adapter. ALL LeadSimple REST specifics live here and nowhere else. Field names are UNVERIFIED until the admin API key arrives - read app.leadsimple.com/api_docs FIRST, then fill url/auth_header/field_map and set enabled=true. While enabled=false, WF-2 routes every lead to the email-parse path, which is launch-sufficient (acceptance G-2).",
+  "enabled": false,
+  "url": "UNVERIFIED-SET-FROM-LEADSIMPLE-API-DOCS",
+  "auth_header": "Authorization",
+  "field_map": {
+    "first_name": "UNVERIFIED_first_name",
+    "last_name": "UNVERIFIED_last_name",
+    "email": "UNVERIFIED_email",
+    "phone": "UNVERIFIED_phone",
+    "property_address": "UNVERIFIED_address",
+    "message": "UNVERIFIED_notes",
+    "source": "UNVERIFIED_source",
+    "consent.tcpa": "UNVERIFIED_tcpa_consent",
+    "consent.timestamp": "UNVERIFIED_consent_timestamp",
+    "consent.text_version": "UNVERIFIED_consent_text_version",
+    "consent.ip": "UNVERIFIED_consent_ip",
+    "consent.user_agent": "UNVERIFIED_consent_user_agent",
+    "submission_id": "UNVERIFIED_external_id"
+  },
+  "static_fields": {}
+}
