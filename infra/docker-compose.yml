@@ -1,7 +1,11 @@
-# Single-VPS stack (S3-A1): nginx (public) + certbot + n8n (internal only).
-# n8n is deliberately NOT port-published; it is reachable only via nginx on
-# the internal network, and the editor UI only via SSH tunnel to localhost.
+# Single-VPS stack (S3-A1): nginx (public) + certbot + n8n (localhost-only).
+# The n8n editor binds to 127.0.0.1 on the host, reachable only from the
+# server itself or an SSH tunnel — never from the internet.
 # Image tags: [VERIFY-AT-BUILD] pin current stable digests at deploy time.
+
+# Fixed project name so volume names (wgc_certbot_certs etc.) match the
+# pre-start certbot command in the deploy runbook.
+name: wgc
 
 services:
   nginx:
@@ -34,9 +38,10 @@ services:
   n8n:
     image: n8nio/n8n
     restart: unless-stopped
-    # No ports: editor access is `ssh -L 5678:localhost:5678` + expose below.
-    expose:
-      - "5678"
+    # Bound to the server's localhost ONLY: invisible from the internet,
+    # reachable via `ssh -L 5678:127.0.0.1:5678 root@server`.
+    ports:
+      - "127.0.0.1:5678:5678"
     environment:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY} # REQUIRES-HUMAN-AUTHORIZATION: generate once, back up offline
       - WEBHOOK_URL=https://wgcassetguide.com/hook/

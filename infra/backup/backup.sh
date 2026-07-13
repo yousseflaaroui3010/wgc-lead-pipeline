@@ -8,7 +8,9 @@ set -eu
 STAMP="$(date +%Y%m%d-%H%M%S)"
 WORK="$(mktemp -d)"
 OUT="/var/backups/wgc"
-OFFSITE_DEST="${OFFSITE_DEST:?set OFFSITE_DEST (rclone remote or scp target)}"
+# OFFSITE_DEST=skip keeps backups on this server only (acceptable to start;
+# remember: if the server dies, on-server backups die with it).
+OFFSITE_DEST="${OFFSITE_DEST:?set OFFSITE_DEST (rclone remote, scp target, or 'skip')}"
 RETENTION_DAYS=14
 
 mkdir -p "$OUT"
@@ -26,8 +28,10 @@ docker compose -f /opt/wgc/infra/docker-compose.yml cp n8n:/tmp/workflows-export
 tar -czf "$OUT/wgc-n8n-$STAMP.tar.gz" -C "$WORK" .
 rm -rf "$WORK"
 
-# Off-box copy: rclone if available, else scp.
-if command -v rclone >/dev/null 2>&1; then
+# Off-box copy: rclone if available, else scp; 'skip' = local-only mode.
+if [ "$OFFSITE_DEST" = "skip" ]; then
+  echo "WARNING: off-server copy skipped (OFFSITE_DEST=skip)"
+elif command -v rclone >/dev/null 2>&1; then
   rclone copy "$OUT/wgc-n8n-$STAMP.tar.gz" "$OFFSITE_DEST"
 else
   scp -q "$OUT/wgc-n8n-$STAMP.tar.gz" "$OFFSITE_DEST"
