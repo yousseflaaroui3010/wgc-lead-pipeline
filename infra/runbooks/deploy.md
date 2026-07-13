@@ -1,13 +1,19 @@
 # Runbook: deploy to the real server — the click-by-click guide
 
 Written for a first-time deployer. Follow in order; each part says what
-you should see. Total time: ~2 hours. Cost: ~€4–6/month for the server
-(goes on Jon's invoice) + free email plan.
+you should see. Total time: ~2 hours.
 
-**Shopping list (accounts you'll create):**
+Server: SolusVM "2 GB KVM (Unmetered)" from vpshostingservice.co,
+$24.95/year (bought 2026-07-13; goes on Jon's invoice). 2 GB RAM is
+comfortable for this stack (n8n ~400 MB + nginx). No Supabase or any
+external database is needed on a real server — that was only a crutch for
+the free-demo plan (deploy-free-demo.md); here n8n keeps its memory on
+the server itself.
+
+**Shopping list:**
 1. GitHub (free) — so the server can download our code
-2. Brevo (free) — sends the real emails
-3. Hetzner (~€4–6/mo) — the server itself
+2. Brevo (free) — sends the real emails (needs activation, start it early)
+3. The VPS above — already bought, wait for the welcome email
 4. UptimeRobot (free) — watches the site and warns you if it dies
 
 ---
@@ -31,52 +37,65 @@ somewhere.
 
 ---
 
-## Part 1 — Brevo, the email sender (~10 min)
+## Part 1 — Brevo, the email sender (~10 min + possible activation wait)
 
 Mailpit was fake; this is the real thing. Every lead email goes through it.
+(Menu paths verified against Brevo's help docs, 2026-07-13.)
 
-1. Go to brevo.com → **Sign up free** → confirm your email.
-2. Click your name (top-right) → **SMTP & API** → tab **SMTP**.
-3. You'll see: **SMTP server** (`smtp-relay.brevo.com`), **Port** (587),
-   **Login** (your email), and a **SMTP key value** — click
-   **Generate a new SMTP key**, name it `wgc`, and COPY IT SOMEWHERE SAFE
-   (it's shown once).
+1. Go to brevo.com → **Sign up free** → confirm your email and fill in
+   the company details honestly (Westrom Group / property management) —
+   Brevo reviews new accounts before letting them send.
+2. In the left menu open **Transactional** → **Settings** →
+   **Configuration** → **SMTP relay** (older accounts: profile name
+   top-right → SMTP & API).
+   - If you see a message that transactional email needs **activation**,
+     follow its prompt now (usually a short form about what you'll send —
+     answer: "lead notifications from our own website form"). Approval can
+     take a few hours, so kick this off early and continue with Part 2
+     while you wait.
+3. Click **Generate a new SMTP key** → name it `wgc` → **COPY IT NOW**
+   (it's shown only once). Also note the **Login** shown next to it.
+   The server is `smtp-relay.brevo.com`, port `587`.
 4. Go to **Senders, Domains & Dedicated IPs → Senders** → make sure the
-   email you'll send FROM is listed and verified (your own address is
-   fine to start).
+   address you'll send FROM is listed and verified (your own address is
+   fine to start; authenticating the whole domain improves deliverability
+   later).
 
-**Keep handy for later:** server, port, login, SMTP key, sender address.
+**Keep handy for later:** login, SMTP key, sender address.
 
 ---
 
-## Part 2 — Rent the server at Hetzner (~15 min)
+## Part 2 — Get into your SolusVM server (~15 min once it's active)
 
-1. Go to hetzner.com → **Cloud** → sign up (needs a card or PayPal).
-2. In the Cloud Console (console.hetzner.cloud) → **+ New Project** →
-   name it `wgc` → open it.
-3. Click **Add Server** and choose:
-   - **Location:** Ashburn, VA (closest to Texas visitors)
-   - **Image:** Ubuntu 24.04
-   - **Type:** Shared vCPU → the cheapest x86 option (~€4–6/mo)
-   - **Networking:** leave IPv4 + IPv6 ticked
-4. **SSH key** (your key to the server — do this, it beats passwords):
-   - On your PC, open a terminal and run: `ssh-keygen -t ed25519`
-     — press Enter at every question (no passphrase needed).
-   - Show the public half: `cat ~/.ssh/id_ed25519.pub`
-   - Copy that whole line (starts with `ssh-ed25519`).
-   - Back in Hetzner: **Add SSH key** → paste it → name it `my-pc`.
-5. Skip volumes/backups/placement (Hetzner's paid backup option is nice
-   but our own backups cover us; add it later if you want belt AND
-   suspenders).
-6. Name the server `wgc-prod` → **Create & Buy Now**.
+The order is "pending" until the provider sets it up. You'll get a
+**welcome email** containing: the server's **IP address**, the **root
+password**, and a link to the **SolusVM control panel** (plus its own
+login). Keep all of it safe.
 
-**You should see:** the server appear with an **IP address** like
-`203.0.113.42`. Copy it — you'll use it everywhere below. (Everywhere this
-guide says SERVER-IP, type that number.)
-
-7. Optional but smart — the firewall: left menu **Firewalls** →
-   **Create Firewall** → add three inbound rules: TCP 22, TCP 80, TCP 443
-   → **Apply to** → pick `wgc-prod` → Create.
+1. Wait for the welcome email. If nothing arrives within a day, open a
+   support ticket at vpshostingservice.co — pending that long isn't normal.
+2. Everywhere this guide says **SERVER-IP**, type the IP from that email.
+3. **Check the operating system.** We need **Ubuntu 24.04** (22.04 also
+   works). The welcome email usually says which OS was installed. If it's
+   something else (CentOS, AlmaLinux, Debian…):
+   - Log in to the SolusVM panel from the email → select your server →
+     find the **Reinstall** tab → choose **Ubuntu 24.04 64-bit** →
+     confirm. Takes a few minutes and sets a new root password (the panel
+     shows or emails it).
+   - If Ubuntu isn't in the list, ask their support to install it.
+4. First login, from your PC's terminal:
+   `ssh root@SERVER-IP`
+   - First time it asks "are you sure?" → type `yes`.
+   - Password: the root password from the email (typing shows nothing on
+     screen — that's normal — paste and press Enter).
+   **You should see** a prompt like `root@yourserver:~#`. You are now
+   typing INTO the server.
+5. Immediately change the password (providers email them in plain text):
+   type `passwd` → enter a new strong password twice → store it in your
+   password manager.
+6. Cheap-VPS reality check (30 seconds, still on the server):
+   `free -h` should show ~2.0 total memory, and `df -h /` shows your disk.
+   If either is wildly less than advertised, ticket the provider now.
 
 ---
 
@@ -98,12 +117,14 @@ Don't continue to Part 5 until it does (the certificate step needs it).
 
 ## Part 4 — Prepare the server (~15 min)
 
-1. From your PC's terminal, connect:
-   `ssh root@SERVER-IP`
-   First time it asks "are you sure?" → type `yes`. You should land on a
-   prompt like `root@wgc-prod:~#`. You are now typing INTO the server.
-2. Install Docker (one line, takes a minute):
-   `curl -fsSL https://get.docker.com | sh`
+1. Reconnect if you closed the window (`ssh root@SERVER-IP`, then your
+   new password from Part 2.5).
+2. Install updates, then Docker and git (three lines, a few minutes):
+   ```
+   apt-get update && apt-get upgrade -y
+   curl -fsSL https://get.docker.com | sh
+   apt-get install -y git
+   ```
 3. Download the code:
    `git clone https://github.com/YOUR-USERNAME/wgc-lead-pipeline.git /opt/wgc`
    - If the repo is private (it should be), GitHub asks you to log in:
@@ -113,6 +134,16 @@ Don't continue to Part 5 until it does (the certificate step needs it).
      access to this one repo). Paste it when asked.
 4. Check it's there: `ls /opt/wgc` — you should see `widget`, `n8n`,
    `infra`, `page`, `qa`, `docs`.
+5. Turn on the door-guard (firewall) — allows only SSH and web traffic,
+   blocks everything else. Run exactly this, in this order (allowing SSH
+   FIRST matters, or you lock yourself out):
+   ```
+   ufw allow OpenSSH
+   ufw allow 80/tcp
+   ufw allow 443/tcp
+   ufw --force enable
+   ```
+   **You should see:** "Firewall is active and enabled on system startup".
 
 ---
 
