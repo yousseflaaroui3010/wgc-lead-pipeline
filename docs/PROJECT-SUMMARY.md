@@ -67,10 +67,12 @@ link-checked during discovery):
   edge.
 - Management fees in the DFW market run **8–12% of monthly rent**; median
   Fort Worth rent is ~$2,100. Westrom's own published placement fee is
-  75%/65% of one month's rent. (These verified numbers feed the *next*
-  feature, the cost calculator — no unverified figures go on public pages.)
-- No competitor offers a reusable, brandable calculator wired to a CRM —
-  confirming our custom build is worth doing.
+  75%/65% of one month's rent. (Verified figures — kept for reference; the
+  killed calculator would have shown them, the estimator will not.)
+- **Northpoint's rent estimator (Jon's benchmark) is "powered by Northpoint
+  Market Intelligence & Parcl" — it runs on their own closed-lease data +
+  Parcl's free-tier signals, not a paid AVM.** That's the model to copy and
+  the key to doing Feature 2 at ~$0/mo data cost (see the strategy brief).
 
 ---
 
@@ -124,11 +126,13 @@ link-checked during discovery):
    fallback.)
 2. **Wire n8n on the server** (same steps already rehearsed locally).
 3. **Run the final on-server tests**, then hand Goodjuju the embed snippet.
-4. **Build Feature 2 — the Cost of Management Calculator** (the next
-   sibling PRD): shows owners what self-managing costs them using the
-   verified DFW numbers, and drops them into THIS same pipeline. Chosen
-   as next because it needs zero client decisions and reuses everything
-   already built.
+4. **Build Feature 2 — a Rent Estimate Tool** (Northpoint-style instant
+   on-screen estimate). ⚠️ **Changed 2026-07-15:** Jon killed the Cost of
+   Management Calculator (showing fees scares owners off before the pitch)
+   and instead wants a rent estimator that drops into THIS pipeline. Full
+   data strategy, cost analysis, and open decisions are in
+   `docs/FEATURE2-rent-estimator-strategy.md`. Note this reverses locked
+   decision LD-6 (no instant estimate) → recorded as a scope change/PRD-03.
 
 **What's left / blocked (not code — waiting on the client):**
 See the open decisions below. None block deployment; two (OD-6, OD-7)
