@@ -3,3 +3,9 @@ node_modules/
 .env
 infra/.env
 infra/nginx/hook_id.conf
+
+# SSH keys must never be committed
+infra/newssh
+infra/newssh.pub
+*.pem
+id_*

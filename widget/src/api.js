@@ -1,14 +1,18 @@
-// Network layer: render-token fetch (ADR-2), payload assembly (PRD §E v1.0),
-// and submission with timeout gates so a slow middleware can never hang the
-// host page (PRD NFR + fail-containment rule).
+// Network layer (form v2, 2026-07-16): render-token fetch (ADR-2), payload
+// assembly, and submission with timeout gates so a slow middleware can never
+// hang the host page.
 
-export const SCHEMA_VERSION = '1.0';
-export const CONSENT_TEXT_VERSION = 'WGC-TCPA-2026-07-v1';
+// Implied-consent wording is fixed under the submit button (see form.js
+// FINE_PRINT). Any change to that copy MUST bump this version string.
+export const CONSENT_TEXT_VERSION = 'v2-2026-07-16';
+
+// #13 API_BASE: Railway production webhook base. The hosted page / embed
+// overrides this via the data-endpoint attribute (localhost for dev).
+export const DEFAULT_API_BASE = 'https://REPLACE-ME.up.railway.app/webhook';
 
 const FETCH_TIMEOUT_MS = 10000;
 // Server enforces a 2s–2h token age window; refresh client-side well before
-// the ceiling so a visitor who left the tab open does not get silently
-// bot-rejected on submit.
+// the ceiling so a visitor who left the tab open is not silently rejected.
 const TOKEN_REFRESH_AGE_MS = 60 * 60 * 1000;
 
 function fetchWithTimeout(url, options) {
@@ -35,7 +39,7 @@ export function createTokenStore(endpoint) {
       });
   }
 
-  // Called on user interaction: re-fetch only when the token is nearing the
+  // Called on user interaction: re-fetch only when the token nears the
   // server's age ceiling. Errors are swallowed here (the render-time token
   // may still be valid); submit() surfaces real failures.
   function ensureFresh() {
@@ -46,8 +50,9 @@ export function createTokenStore(endpoint) {
   return { refresh: refresh, ensureFresh: ensureFresh, get: function () { return token; } };
 }
 
-// crypto.randomUUID needs Safari 15.4+; the PRD floor is iOS Safari 15.0,
-// so fall back to a getRandomValues-based UUID v4 on older builds.
+// crypto.randomUUID needs Safari 15.4+; the floor is iOS Safari 15.0, so
+// fall back to a getRandomValues-based UUID v4 on older builds. Kept for the
+// server-side dedupe key (double-submit guard).
 export function newSubmissionId() {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -62,44 +67,36 @@ export function newSubmissionId() {
   );
 }
 
-export function readUtm(search) {
-  const params = new URLSearchParams(search || '');
-  return {
-    source: params.get('utm_source') || '',
-    medium: params.get('utm_medium') || '',
-    campaign: params.get('utm_campaign') || '',
-  };
-}
-
-// Canonical payload v1.0 (PRD §E). Server-side evidence (ip, user_agent) is
-// appended by WF-1; the client never self-reports either.
+// Canonical payload (form v2). ip and user_agent are appended server-side by
+// WF-1; the client never self-reports either. submission_id is transit
+// plumbing for the dedupe guard, not a business field.
 export function buildPayload(data, ctx) {
   return {
-    schema_version: SCHEMA_VERSION,
     submission_id: ctx.submissionId,
-    first_name: data.first_name,
-    last_name: data.last_name,
+    name: data.name,
     email: data.email,
     phone: data.phone,
-    property_address: data.property_address,
-    beds: data.beds,
-    baths: data.baths,
-    message: data.message,
-    source: ctx.source,
-    page_url: ctx.pageUrl,
-    utm: ctx.utm,
+    zip: data.zip,
+    sqft: data.sqft,
+    bedrooms: data.bedrooms == null ? null : data.bedrooms,
+    ebook_opt_in: data.ebook_opt_in === true,
     consent: {
-      tcpa: data.tcpa === true,
-      timestamp: new Date().toISOString(),
+      implied: true,
       text_version: CONSENT_TEXT_VERSION,
+      ts: new Date().toISOString(),
     },
   };
 }
 
-export function submitLead(endpoint, payload, token, honeypotValue) {
+// Posts the lead and returns the parsed JSON response so the caller can
+// branch on its shape (#11: {status:"received"} vs {estimate:{...}}).
+// Anti-abuse plumbing (token, honeypot as `company`, fill_ms) rides along
+// unchanged in mechanism.
+export function submitLead(endpoint, payload, extras) {
   const body = Object.assign({}, payload, {
-    token: token,
-    company: honeypotValue || '',
+    token: extras.token || '',
+    company: extras.honeypot || '',
+    fill_ms: extras.fillMs,
   });
   return fetchWithTimeout(endpoint + '/lead', {
     method: 'POST',
@@ -107,6 +104,6 @@ export function submitLead(endpoint, payload, token, honeypotValue) {
     body: JSON.stringify(body),
   }).then(function (res) {
     if (!res.ok) throw new Error('submit failed: ' + res.status);
-    return true;
+    return res.json().catch(function () { return {}; });
   });
 }

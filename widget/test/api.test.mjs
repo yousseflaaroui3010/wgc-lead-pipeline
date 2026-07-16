@@ -1,59 +1,57 @@
-// Payload contract tests: canonical schema v1.0 (PRD §E) shape, consent
-// semantics (FR-2/FR-3 client half), UUID fallback, UTM parsing.
+// Payload contract tests (form v2): canonical shape, implied-consent
+// semantics, ebook flag, UUID fallback.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildPayload,
   newSubmissionId,
-  readUtm,
-  SCHEMA_VERSION,
   CONSENT_TEXT_VERSION,
 } from '../src/api.js';
 
 const DATA = {
-  first_name: 'Jon', last_name: 'Westrom',
-  email: 'jon@westromgroup.com', phone: '+18174451108',
-  property_address: '100 Main St, Haslet, TX',
-  beds: 3, baths: 2.5, message: null, tcpa: true,
+  name: 'Jon Westrom', email: 'jon@westromgroup.com', phone: '+18174451108',
+  zip: '76052', sqft: 1850, bedrooms: '3', ebook_opt_in: false,
 };
+const CTX = { submissionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' };
 
-const CTX = {
-  submissionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-  source: 'Website - wgcassetguide',
-  pageUrl: 'https://wgcassetguide.com/analysis?utm_source=x',
-  utm: { source: 'x', medium: '', campaign: '' },
-};
-
-test('payload matches canonical contract v1.0 keys exactly', () => {
+test('payload matches the v2 canonical field set', () => {
   const p = buildPayload(DATA, CTX);
   assert.deepEqual(Object.keys(p).sort(), [
-    'baths', 'beds', 'consent', 'email', 'first_name', 'last_name',
-    'message', 'page_url', 'phone', 'property_address', 'schema_version',
-    'source', 'submission_id', 'utm',
+    'bedrooms', 'consent', 'ebook_opt_in', 'email', 'name',
+    'phone', 'sqft', 'submission_id', 'zip',
   ]);
-  assert.equal(p.schema_version, SCHEMA_VERSION);
+  assert.equal(p.name, 'Jon Westrom');
+  assert.equal(p.zip, '76052');
+  assert.equal(p.sqft, 1850);
+  assert.equal(p.bedrooms, '3');
   assert.equal(p.submission_id, CTX.submissionId);
-  assert.equal(p.source, 'Website - wgcassetguide');
 });
 
-test('consent block: tcpa boolean, ISO timestamp, pinned text version; ip/ua are server-side only', () => {
+test('consent block: implied true, pinned text_version, ISO ts; ip/ua are server-side only', () => {
   const p = buildPayload(DATA, CTX);
-  assert.equal(p.consent.tcpa, true);
+  assert.equal(p.consent.implied, true);
   assert.equal(p.consent.text_version, CONSENT_TEXT_VERSION);
-  assert.ok(!Number.isNaN(Date.parse(p.consent.timestamp)));
+  assert.equal(CONSENT_TEXT_VERSION, 'v2-2026-07-16');
+  assert.ok(!Number.isNaN(Date.parse(p.consent.ts)));
   assert.ok(!('ip' in p.consent), 'client must not self-report IP');
-  assert.ok(!('user_agent' in p.consent), 'client must not self-report UA');
+  assert.ok(!('ua' in p.consent), 'client must not self-report UA');
 });
 
-test('unchecked consent submits with tcpa=false (FR-2: lead still delivers)', () => {
-  const p = buildPayload(Object.assign({}, DATA, { tcpa: false }), CTX);
-  assert.equal(p.consent.tcpa, false);
+test('bedrooms omitted -> null in payload', () => {
+  const p = buildPayload(Object.assign({}, DATA, { bedrooms: null }), CTX);
+  assert.equal(p.bedrooms, null);
+});
+
+test('ebook_opt_in flows into the payload as a boolean', () => {
+  assert.equal(buildPayload(Object.assign({}, DATA, { ebook_opt_in: true }), CTX).ebook_opt_in, true);
+  assert.equal(buildPayload(Object.assign({}, DATA, { ebook_opt_in: false }), CTX).ebook_opt_in, false);
+  // Non-boolean coerces to false (only an explicit true opts in).
+  assert.equal(buildPayload(Object.assign({}, DATA, { ebook_opt_in: 'yes' }), CTX).ebook_opt_in, false);
 });
 
 test('newSubmissionId returns UUID v4 shape (incl. non-randomUUID fallback)', () => {
   const re = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   assert.match(newSubmissionId(), re);
-  // Force the Safari 15.0-15.3 fallback branch.
   const original = crypto.randomUUID;
   try {
     Object.defineProperty(globalThis.crypto, 'randomUUID', { value: undefined, configurable: true });
@@ -61,11 +59,4 @@ test('newSubmissionId returns UUID v4 shape (incl. non-randomUUID fallback)', ()
   } finally {
     Object.defineProperty(globalThis.crypto, 'randomUUID', { value: original, configurable: true });
   }
-});
-
-test('readUtm extracts only the three contract keys, empty-string defaults', () => {
-  assert.deepEqual(readUtm('?utm_source=g&utm_medium=cpc&utm_campaign=spring&foo=1'), {
-    source: 'g', medium: 'cpc', campaign: 'spring',
-  });
-  assert.deepEqual(readUtm(''), { source: '', medium: '', campaign: '' });
 });

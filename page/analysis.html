@@ -43,11 +43,12 @@
       </div>
     </noscript>
     <div id="wgc-analysis"></div>
-    <!-- Relative endpoint: this page is always served from the same origin
-         as the hooks (wgcassetguide.com in prod, localhost:8080 in dev). -->
+    <!-- #13 API_BASE: Railway production webhook base. For local dev, swap
+         data-endpoint to your dev hook base, e.g. "http://localhost:8080/hook".
+         Omitting data-endpoint falls back to DEFAULT_API_BASE in api.js. -->
     <script src="/embed.js" async
       data-widget="rental-analysis"
-      data-endpoint="/hook"
+      data-endpoint="https://REPLACE-ME.up.railway.app/webhook"
       data-source="Website - wgcassetguide"></script>
   </main>
 </body>
