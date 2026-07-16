@@ -43,12 +43,15 @@
       </div>
     </noscript>
     <div id="wgc-analysis"></div>
-    <!-- #13 API_BASE: Railway production webhook base. For local dev, swap
-         data-endpoint to your dev hook base, e.g. "http://localhost:8080/hook".
-         Omitting data-endpoint falls back to DEFAULT_API_BASE in api.js. -->
+    <!-- #13 API_BASE: the production default is the Railway webhook base,
+         set as DEFAULT_API_BASE in api.js and used whenever data-endpoint is
+         omitted. This hosted/dev page keeps the local override so the dev
+         stack (nginx same-origin /hook) works. For a prod page on Railway,
+         set data-endpoint to the Railway URL or drop it to inherit the
+         default. -->
     <script src="/embed.js" async
       data-widget="rental-analysis"
-      data-endpoint="https://REPLACE-ME.up.railway.app/webhook"
+      data-endpoint="/hook"
       data-source="Website - wgcassetguide"></script>
   </main>
 </body>
