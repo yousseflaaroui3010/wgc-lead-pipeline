@@ -9,3 +9,6 @@ infra/newssh
 infra/newssh.pub
 *.pem
 id_*
+
+# Client business data stays out of git (full unit addresses)
+data/
