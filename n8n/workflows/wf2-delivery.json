@@ -48,58 +48,83 @@
     },
     {
       "parameters": {
-        "fromEmail": "={{ $env.MAIL_FROM }}",
-        "toEmail": "={{ $env.PARSE_ADDRESS }}",
-        "subject": "New Lead - Free Rental Analysis",
-        "emailFormat": "text",
-        "text": "={{ $json.email_text }}",
-        "options": {}
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.BREVO_API_KEY }}"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sender: { email: $env.MAIL_FROM, name: \"Westrom Group\" }, to: [{ email: $env.PARSE_ADDRESS }], subject: \"New Lead - Free Rental Analysis\", textContent: $('CRM API attempt (mapped)').first().json.email_text }) }}",
+        "options": {
+          "timeout": 15000
+        }
       },
       "id": "wf2-parse-mail",
       "name": "Fallback: email-parse path",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         660,
         -120
       ],
-      "credentials": {
-        "smtp": {
-          "id": "SET-AFTER-IMPORT",
-          "name": "WGC SMTP"
-        }
-      },
-      "notes": "LeadSimple per-Source parse address: plain text, one field per line (G-2). Transactional relay only (S3-D3)."
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "notes": "LeadSimple per-Source parse address via Brevo HTTP API (Railway blocks SMTP). Plain text, one field per line (G-2)."
     },
     {
       "parameters": {
-        "fromEmail": "={{ $env.MAIL_FROM }}",
-        "toEmail": "={{ $env.NOTIFY_EMAILS }}",
-        "subject": "=New rental analysis lead: {{ $json.lead_name }}",
-        "emailFormat": "text",
-        "text": "=A new free rental analysis request just arrived.\n\n{{ $json.email_text }}\n\nDelivery: {{ $json.delivered_api ? 'CRM API (primary)' : 'email-parse fallback' }}",
-        "options": {}
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.BREVO_API_KEY }}"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sender: { email: $env.MAIL_FROM, name: \"Westrom Group\" }, to: $env.NOTIFY_EMAILS.split(\",\").map(e => ({ email: e.trim() })), subject: \"New rental analysis lead: \" + $('CRM API attempt (mapped)').first().json.lead_name, textContent: \"A new free rental analysis request just arrived.\\n\\n\" + $('CRM API attempt (mapped)').first().json.email_text + \"\\n\\nDelivery: \" + ($('CRM API attempt (mapped)').first().json.delivered_api ? \"CRM API (primary)\" : \"email-parse fallback\") }) }}",
+        "options": {
+          "timeout": 15000
+        }
       },
       "id": "wf2-notify",
       "name": "Notify Jon + Ashley + Youssef",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         0
       ],
-      "credentials": {
-        "smtp": {
-          "id": "SET-AFTER-IMPORT",
-          "name": "WGC SMTP"
-        }
-      },
-      "notes": "FR-6: within 60s of submission. Also the tertiary delivery path (full lead body included)."
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "notes": "FR-6: within 60s. Tertiary delivery path (full lead body). Fails loud -> WF-3 error alert."
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Record which path delivered (feeds WF-3 weekly export, instrument I1).\nconst fs = require('fs');\nconst METRICS = '/home/node/.n8n/wgc-metrics.json';\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync(METRICS, 'utf8')); } catch (e) { /* first run */ }\nconst day = new Date().toISOString().slice(0, 10);\nm.days[day] = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nm.days[day][$json.delivered_api ? 'delivered_api' : 'delivered_email'] += 1;\nfs.writeFileSync(METRICS, JSON.stringify(m));\nreturn [{ json: { delivered: true, submission_id: $json.submission_id } }];"
+        "jsCode": "// Record which path delivered (feeds WF-3 weekly export, instrument I1).\nconst fs = require('fs');\nconst METRICS = '/home/node/.n8n/wgc-metrics.json';\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync(METRICS, 'utf8')); } catch (e) { /* first run */ }\nconst day = new Date().toISOString().slice(0, 10);\nm.days[day] = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nm.days[day][$('CRM API attempt (mapped)').first().json.delivered_api ? 'delivered_api' : 'delivered_email'] += 1;\nfs.writeFileSync(METRICS, JSON.stringify(m));\nreturn [{ json: { delivered: true, submission_id: $('CRM API attempt (mapped)').first().json.submission_id } }];"
       },
       "id": "wf2-mark",
       "name": "Mark delivered",
