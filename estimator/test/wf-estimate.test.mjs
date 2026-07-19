@@ -42,8 +42,9 @@ function runNode(jsCode, leadItems, indexJson) {
     return require(mod); // eslint-disable-line
   };
   const $input = { all: () => leadItems.map((json) => ({ json })) };
-  const fn = new Function('$input', 'require', 'process', jsCode);
-  return fn($input, fakeRequire, { env: {} });
+  // n8n injects $input, require, and $env into the Code node's scope.
+  const fn = new Function('$input', 'require', '$env', jsCode);
+  return fn($input, fakeRequire, {});
 }
 
 test('WF-1 wiring: Compute estimate fans out to Respond + Dispatch, response reads own input', () => {
@@ -88,7 +89,7 @@ test('missing/broken index -> node still returns the lead, no estimate', () => {
   const jsCode = loadComputeNode();
   const $input = { all: () => [{ json: leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' }) }] };
   const throwingRequire = (mod) => (mod === 'fs' ? { readFileSync: () => { throw new Error('ENOENT'); } } : require(mod));
-  const out = new Function('$input', 'require', 'process', jsCode)($input, throwingRequire, { env: {} });
+  const out = new Function('$input', 'require', '$env', jsCode)($input, throwingRequire, {});
   assert.equal(out.length, 1);
   assert.equal('estimate' in out[0].json, false);
 });
