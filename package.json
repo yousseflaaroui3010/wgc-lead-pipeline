@@ -15,7 +15,8 @@
     "estimate:preview": "node estimator/preview.mjs",
     "estimate:demo": "node estimator/mock-server.mjs",
     "wf:build": "node estimator/build-wf.mjs",
-    "wf:check": "node estimator/build-wf.mjs --check"
+    "wf:check": "node estimator/build-wf.mjs --check",
+    "wf:seed": "node estimator/build-seed.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"
