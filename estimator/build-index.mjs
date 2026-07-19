@@ -29,6 +29,7 @@ const records = leases.map((l) => ({
   rent: l.rent,
   date: l.startDate ? l.startDate.toISOString().slice(0, 10) : null,
   type: l.type || undefined,
+  uid: l.uid || undefined, // opaque unit id for dedupe; not the address
 }));
 
 const index = {

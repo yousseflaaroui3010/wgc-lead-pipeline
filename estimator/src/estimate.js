@@ -85,6 +85,18 @@ function zip5(s) {
   return m ? m[0] : null;
 }
 
+// Opaque, stable id for a physical unit, derived from its address so we can
+// collapse repeat leases of the SAME home (the export is a lease history:
+// 757 rows / 549 units). FNV-1a hash, never displayed — the address itself
+// stays out of the index (PII rule). Null when there is no address to key on.
+function unitId(address) {
+  const s = String(address == null ? '' : address).trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!s) return null;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+
 // MM/DD/YYYY -> Date (UTC midnight) or null.
 function parseUsDate(s) {
   const m = String(s == null ? '' : s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -116,6 +128,7 @@ export function normalizeLease(row) {
     sqft: parseIntLoose(row['Total Area']),
     rent,
     startDate: parseUsDate(row['Start Date']),
+    uid: unitId(row['Unit Address']),
   };
 }
 
@@ -142,7 +155,25 @@ export function loadIndex(records) {
     startDate: r.startDate instanceof Date
       ? r.startDate
       : (r.date ? new Date(r.date) : (r.startDate ? new Date(r.startDate) : null)),
+    uid: r.uid == null ? null : r.uid,
   })).filter((l) => l.zip && l.rent != null);
+}
+
+// Collapse a lease history to one record per physical unit, keeping each unit's
+// MOST RECENT lease (current rent, no double-counting). Leases with no uid
+// (no address to key on) are each kept as distinct. This is the estimate basis
+// AND what stops the same home from appearing as three "different" comps.
+export function dedupeByUnit(leases) {
+  const best = new Map();
+  const out = [];
+  for (const l of leases) {
+    if (!l.uid) { out.push(l); continue; }
+    const t = l.startDate ? l.startDate.getTime() : -Infinity;
+    const cur = best.get(l.uid);
+    if (!cur || t > cur.t) best.set(l.uid, { l, t });
+  }
+  for (const { l } of best.values()) out.push(l);
+  return out;
 }
 
 // --- Segment matching ---
@@ -255,7 +286,10 @@ export function estimateRent(query, leases, opts = {}) {
   const zip = zip5(query && query.zip);
   if (!zip || !Array.isArray(leases) || !leases.length) return null;
 
-  const { label, matches } = selectMatches({ ...query, zip }, leases, minComps);
+  // One observation per home (most recent lease) unless the caller opts out.
+  const pool = opts.dedupe === false ? leases : dedupeByUnit(leases);
+
+  const { label, matches } = selectMatches({ ...query, zip }, pool, minComps);
   if (!matches.length) return null;
 
   const rents = matches.map((l) => l.rent).sort((a, b) => a - b);

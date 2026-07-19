@@ -9,6 +9,7 @@ import {
   normalizeLease,
   normalizeLeases,
   loadIndex,
+  dedupeByUnit,
   estimateRent,
 } from '../src/estimate.js';
 
@@ -128,6 +129,40 @@ test('unknown zip with no data returns null (caller falls back to received shape
   const leases = normalizeLeases(CSV);
   assert.equal(estimateRent({ zip: '99999', sqft: 1000, beds: '3' }, leases, { now: NOW }), null);
   assert.equal(estimateRent({ zip: '76001' }, [], { now: NOW }), null);
+});
+
+test('repeat leases of the SAME unit collapse to one comp (most recent), not three', () => {
+  // Mirrors real data: one home re-leased 3x at the same rent + two other homes.
+  const rows = [
+    'Unit Address,Unit City,Unit Zip,Start Date,Monthly Rent,Year Built,Total Area,Bathrooms,Bedrooms,Building Type',
+    '10721 Deauville Dr,Fort Worth,76108,07/06/2026,"$1,695.00",2011,"1,091",1.5,3,House',
+    '10721 Deauville Dr,Fort Worth,76108,01/24/2025,"$1,695.00",2011,"1,091",1.5,3,House',
+    '10721 Deauville Dr,Fort Worth,76108,06/01/2024,"$1,695.00",2011,"1,091",1.5,3,House',
+    '3104 Middleview Rd,Fort Worth,76108,06/26/2026,"$1,995.00",2005,"1,150",2.0,3,House',
+    '1244 Hickory Bend Ln,Fort Worth,76108,03/18/2026,"$2,095.00",2008,"1,200",2.0,3,House',
+  ].join('\n');
+  const leases = normalizeLeases(rows);
+  const est = estimateRent({ zip: '76108', sqft: 1091, beds: '3' }, leases, { now: NOW, minComps: 1 });
+  // Deauville must appear at most once, and its comp uses the most recent lease.
+  const deauville = est.comps.filter((c) => c.rent === 1695);
+  assert.equal(deauville.length, 1, 'same unit should not repeat in comps');
+  assert.equal(deauville[0].ago_days, 13); // 07/06 -> 07/19 = 13 days, not 542/779
+  // Three distinct homes -> up to three distinct comps.
+  const rents = new Set(est.comps.map((c) => c.rent));
+  assert.ok(rents.size >= 2, 'comps should show different homes');
+});
+
+test('dedupeByUnit keeps distinct units and one-per-unit', () => {
+  const leases = normalizeLeases([
+    'Unit Address,Unit Zip,Start Date,Monthly Rent,Total Area,Bathrooms,Bedrooms,Building Type',
+    'A St,76108,07/06/2026,"$1,700.00","1,000",2,3,House',
+    'A St,76108,01/01/2025,"$1,600.00","1,000",2,3,House',
+    'B St,76108,05/01/2026,"$1,900.00","1,100",2,3,House',
+  ].join('\n'));
+  const deduped = dedupeByUnit(leases);
+  assert.equal(deduped.length, 2); // A + B
+  const a = deduped.find((l) => l.rent === 1700 || l.rent === 1600);
+  assert.equal(a.rent, 1700); // most recent lease of A St
 });
 
 test('loadIndex rehydrates ISO date records into the lease shape estimateRent uses', () => {
