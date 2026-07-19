@@ -60,29 +60,33 @@ test('WF-1 wiring: Compute estimate fans out to Respond + Dispatch, response rea
   assert.ok(!body.includes("$('Compute estimate')"), 'no fragile cross-node reference');
 });
 
+// The Compute node's real input is WF-1's validate-node output: the lead is
+// nested under `payload` (plus bot:false). Tests MUST use this shape.
+const leadItem = (p) => ({ bot: false, payload: p });
+
 test('generated Compute estimate node runs and attaches an estimate', () => {
-  const out = runNode(loadComputeNode(), [{ zip: '76052', sqft: 1350, bedrooms: '3', name: 'X' }], FIXTURE_INDEX);
+  const out = runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3', name: 'X' })], FIXTURE_INDEX);
   assert.equal(out.length, 1);
   const j = out[0].json;
-  assert.equal(j.name, 'X', 'passes lead fields through');
+  assert.equal(j.payload.name, 'X', 'passes lead fields through');
   assert.ok(j.estimate && typeof j.estimate.low === 'number' && Array.isArray(j.estimate.comps));
 });
 
 test('node output equals estimate.js for the same inputs (parity)', () => {
   const leases = loadIndexLike(FIXTURE_INDEX.records);
   const direct = estimateRent({ zip: '76052', sqft: 1350, beds: '3' }, leases);
-  const out = runNode(loadComputeNode(), [{ zip: '76052', sqft: 1350, bedrooms: '3' }], FIXTURE_INDEX);
+  const out = runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' })], FIXTURE_INDEX);
   assert.deepEqual(out[0].json.estimate, direct);
 });
 
 test('no comparable data -> no estimate key (widget shows received card)', () => {
-  const out = runNode(loadComputeNode(), [{ zip: '99999', sqft: 1000, bedrooms: '3' }], FIXTURE_INDEX);
+  const out = runNode(loadComputeNode(), [leadItem({ zip: '99999', sqft: 1000, bedrooms: '3' })], FIXTURE_INDEX);
   assert.equal('estimate' in out[0].json, false);
 });
 
 test('missing/broken index -> node still returns the lead, no estimate', () => {
   const jsCode = loadComputeNode();
-  const $input = { all: () => [{ json: { zip: '76052', sqft: 1350, bedrooms: '3' } }] };
+  const $input = { all: () => [{ json: leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' }) }] };
   const throwingRequire = (mod) => (mod === 'fs' ? { readFileSync: () => { throw new Error('ENOENT'); } } : require(mod));
   const out = new Function('$input', 'require', 'process', jsCode)($input, throwingRequire, { env: {} });
   assert.equal(out.length, 1);

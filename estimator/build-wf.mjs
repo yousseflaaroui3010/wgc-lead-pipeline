@@ -35,7 +35,8 @@ function buildJsCode() {
     'const __leases = loadIndex(__records);',
     'return $input.all().map((__it) => {',
     '  const __j = __it.json || {};',
-    '  const __estimate = estimateRent({ zip: __j.zip, sqft: __j.sqft, beds: __j.bedrooms }, __leases);',
+    '  const __p = __j.payload || __j; // WF-1 validate node nests the lead under .payload',
+    '  const __estimate = estimateRent({ zip: __p.zip, sqft: __p.sqft, beds: __p.bedrooms }, __leases);',
     '  return { json: Object.assign({}, __j, __estimate ? { estimate: __estimate } : {}) };',
     '});',
   ].join('\n');
