@@ -96,7 +96,7 @@ export function buildPayload(data, ctx) {
 export function submitLead(endpoint, payload, extras) {
   const body = Object.assign({}, payload, {
     token: extras.token || '',
-    company: extras.honeypot || '',
+    fax: extras.honeypot || '', // honeypot; renamed from "company" (autofill false-positive)
     fill_ms: extras.fillMs,
   });
   return fetchWithTimeout(endpoint + '/lead', {

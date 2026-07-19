@@ -78,10 +78,13 @@ function formHtml(cfg) {
     '<input type="checkbox" id="wgc-ebook" name="ebook_opt_in">' +
     '<label for="wgc-ebook">' + escapeHtml(STRINGS.ebookLabel) + '</label>' +
     '</div>' +
-    // Honeypot (bot defense), unchanged: real users never see or tab into it.
+    // Honeypot (bot defense). Named "fax" on purpose: bots fill plausible
+    // fields, but browser autofill profiles do NOT store a fax number —
+    // "company" got autofilled by real users' browsers and silently
+    // bot-rejected them (found in prod testing 2026-07-19).
     '<div class="wgc-hp" aria-hidden="true">' +
-    '<label for="wgc-company">Company</label>' +
-    '<input id="wgc-company" name="company" type="text" tabindex="-1" autocomplete="off">' +
+    '<label for="wgc-fax">Fax number</label>' +
+    '<input id="wgc-fax" name="fax" type="text" tabindex="-1" autocomplete="off">' +
     '</div>' +
     '<button class="wgc-btn" type="submit" id="wgc-submit">Get My Free Analysis</button>' +
     // Implied-consent fine print under the submit button (#8).
@@ -236,7 +239,7 @@ function mount(script) {
       var payload = buildPayload(checked.data, { submissionId: submissionId });
       var extras = {
         token: tokens.get() || '',
-        honeypot: shadow.getElementById('wgc-company').value,
+        honeypot: shadow.getElementById('wgc-fax').value,
         fillMs: Date.now() - mountTime,
       };
 
