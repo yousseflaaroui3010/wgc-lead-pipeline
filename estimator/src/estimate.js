@@ -124,6 +124,27 @@ export function normalizeLeases(csvText) {
   return parseCsv(csvText).map(normalizeLease).filter(Boolean);
 }
 
+// The deployed runtime (n8n) does not read the gitignored CSV; it loads a
+// pre-built segment index (build-index.mjs) whose `date` is an ISO string.
+// loadIndex rehydrates that JSON back into the lease shape estimateRent wants
+// (startDate as a Date). Accepts either the compact index records or already-
+// normalized leases, so callers can pass whichever they have.
+export function loadIndex(records) {
+  if (!Array.isArray(records)) return [];
+  return records.map((r) => ({
+    zip: r.zip,
+    city: r.city || '',
+    type: r.type || '',
+    beds: r.beds == null ? null : r.beds,
+    baths: r.baths == null ? null : r.baths,
+    sqft: r.sqft || null,
+    rent: r.rent,
+    startDate: r.startDate instanceof Date
+      ? r.startDate
+      : (r.date ? new Date(r.date) : (r.startDate ? new Date(r.startDate) : null)),
+  })).filter((l) => l.zip && l.rent != null);
+}
+
 // --- Segment matching ---
 
 // Form beds are '2'|'3'|'4'|'5+'. '5+' means >= 5; others are exact.

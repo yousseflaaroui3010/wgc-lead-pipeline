@@ -8,6 +8,7 @@ import {
   parseCsv,
   normalizeLease,
   normalizeLeases,
+  loadIndex,
   estimateRent,
 } from '../src/estimate.js';
 
@@ -127,6 +128,22 @@ test('unknown zip with no data returns null (caller falls back to received shape
   const leases = normalizeLeases(CSV);
   assert.equal(estimateRent({ zip: '99999', sqft: 1000, beds: '3' }, leases, { now: NOW }), null);
   assert.equal(estimateRent({ zip: '76001' }, [], { now: NOW }), null);
+});
+
+test('loadIndex rehydrates ISO date records into the lease shape estimateRent uses', () => {
+  // Mirrors what build-index.mjs emits: compact records with `date` as ISO.
+  const records = normalizeLeases(CSV).map((l) => ({
+    zip: l.zip, beds: l.beds, baths: l.baths, sqft: l.sqft, rent: l.rent,
+    date: l.startDate ? l.startDate.toISOString().slice(0, 10) : null,
+    type: l.type,
+  }));
+  const leases = loadIndex(records);
+  assert.equal(leases.length, records.length);
+  assert.ok(leases[0].startDate instanceof Date);
+  const est = estimateRent({ zip: '76001', sqft: 1100, beds: '3' }, leases, { now: NOW });
+  assert.ok(est && est.low <= est.high);
+  // ago_days must still compute correctly from the rehydrated date.
+  assert.ok(est.comps.every((c) => c.ago_days == null || c.ago_days >= 0));
 });
 
 test('missing beds still estimates from zip+sqft (beds is optional in form v2)', () => {

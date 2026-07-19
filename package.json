@@ -10,7 +10,10 @@
   "scripts": {
     "build": "node widget/build.mjs",
     "test": "node --test widget/test/validate.test.mjs widget/test/api.test.mjs widget/test/success.test.mjs estimator/test/estimate.test.mjs",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run build",
+    "estimate:index": "node estimator/build-index.mjs",
+    "estimate:preview": "node estimator/preview.mjs",
+    "estimate:demo": "node estimator/mock-server.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"

@@ -12,3 +12,6 @@ id_*
 
 # Client business data stays out of git (full unit addresses)
 data/
+# Derived from the lease data (rents by segment) — same business-data rule.
+# Regenerated from the CSV via `npm run estimate:index`; mounted into n8n.
+estimator/dist/
