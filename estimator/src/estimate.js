@@ -245,18 +245,41 @@ function daysAgo(startDate, now) {
   return d < 0 ? 0 : d; // active leases can have near-future start dates
 }
 
-// Pick up to `n` comps closest to the query (by sqft distance, then recency).
-function pickComps(query, matches, n, now) {
+// Comps are chosen to read like Northpoint's "comparable records": same ZIP,
+// same bedroom count (never mix bed counts — that is what makes them credible),
+// a natural sqft spread, and FRESHEST FIRST (their "LAST SEEN" ordering). This
+// is deliberately decoupled from the estimate's tight sqft tier, which can be
+// too narrow to surface recent comps. Beds is kept matched even when it means
+// showing fewer comps; geography widens (zip -> zip3) only if the same-beds
+// pool is thin.
+function selectCompPool(query, pool) {
+  const zip = query.zip;
+  const zip3 = zip ? zip.slice(0, 3) : null;
+  const beds = query.beds;
+  const ladders = [
+    (l) => l.zip === zip && bedsMatch(beds, l.beds),
+    (l) => zip3 && l.zip.slice(0, 3) === zip3 && bedsMatch(beds, l.beds),
+  ];
+  let widest = [];
+  for (const pred of ladders) {
+    const m = pool.filter(pred);
+    if (m.length > widest.length) widest = m;
+    if (m.length >= 3) return m;
+  }
+  return widest;
+}
+
+function pickComps(query, pool, n, now) {
   const sqft = Number(query.sqft) || 0;
-  return matches
+  return selectCompPool(query, pool)
     .slice()
     .sort((a, b) => {
-      const da = sqft && a.sqft ? Math.abs(a.sqft - sqft) : Number.MAX_SAFE_INTEGER;
-      const db = sqft && b.sqft ? Math.abs(b.sqft - sqft) : Number.MAX_SAFE_INTEGER;
-      if (da !== db) return da - db;
       const ta = a.startDate ? a.startDate.getTime() : 0;
       const tb = b.startDate ? b.startDate.getTime() : 0;
-      return tb - ta; // more recent first
+      if (tb !== ta) return tb - ta; // most recent lease first (Northpoint "LAST SEEN")
+      const da = sqft && a.sqft ? Math.abs(a.sqft - sqft) : Number.MAX_SAFE_INTEGER;
+      const db = sqft && b.sqft ? Math.abs(b.sqft - sqft) : Number.MAX_SAFE_INTEGER;
+      return da - db; // then closest in size
     })
     .slice(0, n)
     .map((l) => ({
@@ -321,7 +344,7 @@ export function estimateRent(query, leases, opts = {}) {
   return {
     low,
     high,
-    comps: pickComps({ ...query, zip }, matches, 3, now),
+    comps: pickComps({ ...query, zip }, pool, 3, now),
     meta: { tier: label, sampleSize: matches.length, source: 'own-lease-history' },
   };
 }
