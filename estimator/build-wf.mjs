@@ -74,15 +74,20 @@ if (!node) {
   node.parameters.jsCode = jsCode;
 }
 
-// --- rewire: Bot?(false, index 1) -> Compute estimate -> Dispatch WF-2 ---
+// --- rewire: Bot?(false) -> Compute estimate, which FANS OUT to both the
+// response and the async WF-2 dispatch. Fanning out (instead of chaining the
+// response AFTER the executeWorkflow node and referencing it across that node)
+// keeps the estimate on the response node's own input, so n8n paired-item
+// tracking cannot drop it. WF-2 still fires; it just no longer feeds Respond. ---
 const ref = (name) => ({ node: name, type: 'main', index: 0 });
 wf.connections['Bot?'].main[1] = [ref(NODE)];
-wf.connections[NODE] = { main: [[ref('Dispatch WF-2 (async)')]] };
+wf.connections[NODE] = { main: [[ref('Respond success (accepted)'), ref('Dispatch WF-2 (async)')]] };
+wf.connections['Dispatch WF-2 (async)'] = { main: [[]] };
 
-// --- accepted response carries the estimate (referenced from the compute node,
-// so an intermediate executeWorkflow node cannot drop it) ---
+// --- accepted response reads the estimate from its OWN input ($json); no
+// cross-node reference and no spread, for maximum n8n-expression compatibility ---
 wf.nodes.find((n) => n.name === 'Respond success (accepted)').parameters.responseBody =
-  "={{ ({ ok: true, ...( $('Compute estimate').item.json.estimate ? { estimate: $('Compute estimate').item.json.estimate } : {} ) }) }}";
+  '={{ $json.estimate ? { ok: true, estimate: $json.estimate } : { ok: true } }}';
 
 writeFileSync(WF, JSON.stringify(wf, null, 2) + '\n');
 console.log(`wf:build OK — injected "${NODE}" (${jsCode.length} chars) + rewired WF-1 accepted path`);
