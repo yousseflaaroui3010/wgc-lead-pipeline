@@ -6,9 +6,10 @@
 // FINE_PRINT). Any change to that copy MUST bump this version string.
 export const CONSENT_TEXT_VERSION = 'v2-2026-07-16';
 
-// #13 API_BASE: Railway production webhook base. The hosted page / embed
-// overrides this via the data-endpoint attribute (localhost for dev).
-export const DEFAULT_API_BASE = 'https://REPLACE-ME.up.railway.app/webhook';
+// #13 API_BASE: Railway production webhook base incl. the hook segment
+// (public by design once the form ships; bot defense is the HMAC token, not
+// path secrecy). Dev pages override via the data-endpoint attribute.
+export const DEFAULT_API_BASE = 'https://main-production-bf72.up.railway.app/webhook/d043c102d78e';
 
 const FETCH_TIMEOUT_MS = 10000;
 // Server enforces a 2s–2h token age window; refresh client-side well before
