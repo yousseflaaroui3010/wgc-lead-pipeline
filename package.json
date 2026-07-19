@@ -9,11 +9,13 @@
   },
   "scripts": {
     "build": "node widget/build.mjs",
-    "test": "node --test widget/test/validate.test.mjs widget/test/api.test.mjs widget/test/success.test.mjs estimator/test/estimate.test.mjs",
-    "check": "npm run test && npm run build",
+    "test": "node --test widget/test/validate.test.mjs widget/test/api.test.mjs widget/test/success.test.mjs estimator/test/estimate.test.mjs estimator/test/wf-estimate.test.mjs",
+    "check": "npm run test && npm run wf:check && npm run build",
     "estimate:index": "node estimator/build-index.mjs",
     "estimate:preview": "node estimator/preview.mjs",
-    "estimate:demo": "node estimator/mock-server.mjs"
+    "estimate:demo": "node estimator/mock-server.mjs",
+    "wf:build": "node estimator/build-wf.mjs",
+    "wf:check": "node estimator/build-wf.mjs --check"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"
