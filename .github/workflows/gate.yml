@@ -15,6 +15,10 @@ jobs:
         run: for f in $(find widget estimator -name '*.js' -path '*/src/*' -not -path '*/node_modules/*'); do node --check "$f" || exit 1; done
       - name: Tests
         run: npm test
+      - name: WF drift guard (generated Compute node must match estimate.js)
+        run: npm run wf:check
+      - name: Bundle size gate (build fails over 15,360 B gzip, S2-D1)
+        run: npm run build
       - name: Commit message format
         run: |
           git log origin/main..HEAD --format=%B | grep -q "INTENT:" || \
