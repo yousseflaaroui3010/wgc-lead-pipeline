@@ -1,255 +1,379 @@
-(()=>{var _=`/* Compiled into the open shadow root (TD-1). System font stack only:
-   @font-face does not apply inside shadow roots. RTL-ready: logical
-   properties (margin-inline / inset-inline) instead of left/right. */
-
-:host {
-  all: initial;
-  display: block;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: #1a1a1a;
-  line-height: 1.45;
-}
-
-.wgc-wrap {
-  box-sizing: border-box;
-  min-height: 520px; /* reserved height: no layout shift on load */
-  max-width: 480px;
-  padding: 20px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.wgc-wrap *,
-.wgc-wrap *::before,
-.wgc-wrap *::after {
-  box-sizing: border-box;
-  font-family: inherit;
-}
-
-.wgc-title {
-  margin: 0 0 4px;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.wgc-sub {
-  margin: 0 0 16px;
-  font-size: 14px;
-  color: #444444;
-}
-
-.wgc-field {
-  margin-block-end: 12px;
-}
-
-.wgc-row {
-  display: flex;
-  gap: 12px;
-}
-
-.wgc-row .wgc-field {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.wgc-label {
-  display: block;
-  margin-block-end: 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.wgc-input {
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 16px; /* >=16px stops iOS Safari zoom-on-focus */
-  border: 1px solid #8c8c8c;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.wgc-input:focus,
-.wgc-check input:focus,
-.wgc-seg-opt:focus,
-.wgc-btn:focus,
-.wgc-link:focus {
-  outline: 3px solid #1a56b0;
-  outline-offset: 1px;
-}
-
-.wgc-input[aria-invalid="true"] {
-  border-color: #b3261e;
-}
-
-.wgc-err {
-  display: block;
-  margin-block-start: 4px;
-  font-size: 13px;
-  color: #b3261e;
-  min-height: 1em;
-}
-
-/* Segmented single-select (bedrooms) */
-.wgc-seg {
-  display: flex;
-  gap: 8px;
-}
-
-.wgc-seg-opt {
-  flex: 1 1 0;
-  min-height: 44px; /* touch target */
-  padding: 10px 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a56b0;
-  background: #ffffff;
-  border: 1px solid #8c8c8c;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.wgc-seg-opt[aria-checked="true"] {
-  color: #ffffff;
-  background: #1a56b0;
-  border-color: #1a56b0;
-}
-
-.wgc-check {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin-block: 14px;
-}
-
-.wgc-check input {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  margin-block-start: 2px;
-}
-
-.wgc-check label {
-  font-size: 13px;
-  color: #333333;
-}
-
-.wgc-btn {
-  display: block;
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  background: #1a56b0;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.wgc-btn[disabled] {
-  background: #7a95bd;
-  cursor: default;
-}
-
-.wgc-fineprint {
-  margin: 10px 0 0;
-  font-size: 12px;
-  color: #555555;
-  text-align: center;
-}
-
-.wgc-privacy {
-  display: block;
-  margin-block-start: 8px;
-  font-size: 12px;
-  text-align: center;
-}
-
-.wgc-link {
-  color: #1a56b0;
-}
-
-.wgc-status {
-  margin: 0 0 12px;
-  font-size: 14px;
-}
-
-.wgc-status[data-kind="error"] {
-  color: #b3261e;
-}
-
-/* Success / result states */
-.wgc-panel {
-  min-height: 460px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-  gap: 12px;
-}
-
-.wgc-result {
-  justify-content: flex-start;
-  padding-block-start: 8px;
-}
-
-.wgc-range {
-  margin: 4px 0;
-  font-size: 30px;
-  font-weight: 800;
-  color: #1a56b0;
-}
-
-.wgc-range-unit {
-  font-size: 16px;
-  font-weight: 600;
-  color: #444444;
-}
-
-.wgc-comps-heading {
-  margin: 8px 0 4px;
-  font-weight: 600;
-}
-
-.wgc-comps {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-  text-align: start;
-}
-
-.wgc-comp {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 0;
-  border-block-end: 1px solid #ececec;
-  font-size: 13px;
-}
-
-.wgc-comp-rent {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.wgc-ebook-note {
-  color: #1a7a3c;
-  font-weight: 600;
-}
-
-.wgc-thanks {
-  margin-block-start: 8px;
-}
-
-/* Honeypot: visually removed but still in the DOM for naive bots.
-   display:none is deliberately avoided (some bots skip hidden fields). */
-.wgc-hp {
-  position: absolute !important;
-  inset-inline-start: -9999px !important;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-`;var G=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,Y=/^\d{5}$/,I=["2","3","4","5+"],h={name:{min:1,max:120},email:{max:254},sqft:{min:300,max:1e4},bedrooms:{options:I}};function Z(e){let t=String(e==null?"":e).trim();return t.length<h.name.min||t.length>h.name.max?null:t}function $(e){let t=String(e==null?"":e).trim();return t.length>h.email.max||!G.test(t)?null:t}function K(e){let t=String(e==null?"":e).trim(),n=t.replace(/\D/g,"");return t.startsWith("+")&&!t.startsWith("+1")?null:t.startsWith("+")?n.length===11?"+"+n:null:n.length===10?"+1"+n:n.length===11&&n[0]==="1"?"+"+n:null}function V(e){let t=String(e==null?"":e).trim();return Y.test(t)?t:null}function J(e){let t=String(e==null?"":e).trim();if(t==="")return null;let n=Number(t);return!Number.isFinite(n)||!Number.isInteger(n)||n<h.sqft.min||n>h.sqft.max?null:n}function X(e){let t=String(e==null?"":e).trim();return t===""?null:I.indexOf(t)!==-1?t:void 0}function q(e){let t={},n={};return n.name=Z(e.name),n.name===null&&(t.name="Enter your name."),n.email=$(e.email),n.email===null&&(t.email="Enter a valid email address."),n.phone=K(e.phone),n.phone===null&&(t.phone="Enter a valid US phone number (10 digits)."),n.zip=V(e.zip),n.zip===null&&(t.zip="Enter a 5-digit ZIP code."),n.sqft=J(e.sqft),n.sqft===null&&(t.sqft="Enter square footage between 300 and 10,000."),n.bedrooms=X(e.bedrooms),n.bedrooms===void 0&&(t.bedrooms="Choose 2, 3, 4, or 5+."),Object.keys(t).length?{ok:!1,errors:t}:{ok:!0,data:n}}var Q="v2-2026-07-16",z="https://main-production-bf72.up.railway.app/webhook/d043c102d78e";function O(e,t){let n=new AbortController,i=setTimeout(function(){n.abort()},1e4),r=Object.assign({},t,{signal:n.signal});return fetch(e,r).finally(function(){clearTimeout(i)})}function L(e){let t=null,n=0;function i(){return O(e+"/token",{method:"GET"}).then(function(l){if(!l.ok)throw new Error("token fetch failed: "+l.status);return l.text()}).then(function(l){return t=l.trim(),n=Date.now(),t})}function r(){return t&&Date.now()-n<36e5?Promise.resolve(t):i().catch(function(){return t})}return{refresh:i,ensureFresh:r,get:function(){return t}}}function B(){if(typeof crypto.randomUUID=="function")return crypto.randomUUID();let e=crypto.getRandomValues(new Uint8Array(16));e[6]=e[6]&15|64,e[8]=e[8]&63|128;let t=Array.prototype.map.call(e,function(n){return(n+256).toString(16).slice(1)}).join("");return t.slice(0,8)+"-"+t.slice(8,12)+"-"+t.slice(12,16)+"-"+t.slice(16,20)+"-"+t.slice(20)}function H(e,t){return{submission_id:t.submissionId,name:e.name,email:e.email,phone:e.phone,zip:e.zip,sqft:e.sqft,bedrooms:e.bedrooms==null?null:e.bedrooms,ebook_opt_in:e.ebook_opt_in===!0,consent:{implied:!0,text_version:Q,ts:new Date().toISOString()}}}function P(e,t,n){let i=Object.assign({},t,{token:n.token||"",fax:n.honeypot||"",fill_ms:n.fillMs});return O(e+"/lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(i)}).then(function(r){if(!r.ok)throw new Error("submit failed: "+r.status);return r.json().catch(function(){return{}})})}var p={finePrint:"By requesting your analysis, you agree Westrom Group may contact you about your property.",ebookLabel:"Also send me the free guide: How to Hire the Best Property Manager for You",ebookSent:"Your free guide is on its way to your inbox.",receivedTitle:"Request received",receivedBody:"Your analysis will be prepared by the Westrom team. We will be in touch shortly.",estimateTitle:"Your estimated rent range",compsHeading:"Recent nearby rentals",cta:"Get a free expert review",thanksTitle:"You are all set",thanksBody:"A Westrom specialist will review your property and follow up with a human-prepared analysis."};function o(e){return String(e==null?"":e).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function ee(e){return e&&typeof e=="object"&&e.estimate?"estimate":"received"}function S(e){let t=Number(e);return Number.isFinite(t)?"$"+Math.round(t).toLocaleString("en-US"):""}function R(e){return e&&e.ebookOptIn?'<p class="wgc-sub wgc-ebook-note">'+o(p.ebookSent)+"</p>":""}function te(e){let t=[];e.zip!=null&&e.zip!==""&&t.push("ZIP "+o(e.zip)),e.beds!=null&&e.beds!==""&&t.push(o(e.beds)+" bd"),e.sqft!=null&&e.sqft!==""&&t.push(Number(e.sqft).toLocaleString("en-US")+" sqft"),e.ago_days!=null&&e.ago_days!==""&&t.push(o(e.ago_days)+" days ago");let n=S(e.rent);return'<li class="wgc-comp"><span class="wgc-comp-meta">'+t.join(" &middot; ")+"</span>"+(n?'<span class="wgc-comp-rent">'+n+"/mo</span>":"")+"</li>"}function ne(e){return'<div class="wgc-panel" role="status" aria-live="assertive"><h2 class="wgc-title">'+o(p.receivedTitle)+'</h2><p class="wgc-sub">'+o(p.receivedBody)+"</p>"+R(e)+"</div>"}function re(e,t){let n=S(e.low),i=S(e.high),r=n&&i?n+" &ndash; "+i:n||i||"",l=Array.isArray(e.comps)?e.comps.slice(0,3):[],g=l.length?'<p class="wgc-sub wgc-comps-heading">'+o(p.compsHeading)+'</p><ul class="wgc-comps">'+l.map(te).join("")+"</ul>":"";return'<div class="wgc-panel wgc-result" role="status" aria-live="assertive"><h2 class="wgc-title">'+o(p.estimateTitle)+'</h2><p class="wgc-range">'+r+'<span class="wgc-range-unit">/mo</span></p>'+g+R(t)+'<button class="wgc-btn" type="button" id="wgc-cta">'+o(p.cta)+'</button><div class="wgc-thanks" id="wgc-thanks" hidden><h3 class="wgc-title">'+o(p.thanksTitle)+'</h3><p class="wgc-sub">'+o(p.thanksBody)+"</p></div></div>"}function D(e,t){return ee(e)==="estimate"?re(e.estimate||{},t):ne(t)}var oe="wgc-analysis",ie=["2","3","4","5+"],y=[{name:"name",label:"Name",type:"text",required:!0,autocomplete:"name",maxlength:120,half:!1},{name:"email",label:"Email",type:"email",required:!0,autocomplete:"email",maxlength:254,half:!1},{name:"phone",label:"Phone",type:"tel",required:!0,autocomplete:"tel",maxlength:20,half:!1},{name:"zip",label:"ZIP code",type:"text",required:!0,autocomplete:"postal-code",maxlength:5,half:!0,inputmode:"numeric"},{name:"sqft",label:"Square footage",type:"text",required:!0,maxlength:6,half:!0,inputmode:"numeric",placeholder:"approximate is fine"}];function x(e){return'<div class="wgc-field"><label class="wgc-label" for="wgc-'+e.name+'">'+o(e.label)+'</label><input class="wgc-input" id="wgc-'+e.name+'" name="'+e.name+'" type="'+e.type+'" maxlength="'+e.maxlength+'"'+(e.inputmode?' inputmode="'+e.inputmode+'"':"")+(e.placeholder?' placeholder="'+o(e.placeholder)+'"':"")+(e.autocomplete?' autocomplete="'+e.autocomplete+'"':"")+(e.required?' required aria-required="true"':"")+' aria-describedby="wgc-err-'+e.name+'"><span class="wgc-err" id="wgc-err-'+e.name+'" aria-live="polite"></span></div>'}function ae(){var e=ie.map(function(t,n){return'<button type="button" class="wgc-seg-opt" role="radio" aria-checked="false" data-value="'+o(t)+'" tabindex="'+(n===0?"0":"-1")+'">'+o(t)+"</button>"}).join("");return'<div class="wgc-field"><span class="wgc-label" id="wgc-bedrooms-label">Bedrooms (optional)</span><div class="wgc-seg" role="radiogroup" aria-labelledby="wgc-bedrooms-label" aria-describedby="wgc-err-bedrooms">'+e+'</div><span class="wgc-err" id="wgc-err-bedrooms" aria-live="polite"></span></div>'}function se(e){var t=x(y[0])+x(y[1])+x(y[2])+'<div class="wgc-row">'+x(y[3])+x(y[4])+"</div>"+ae();return'<div class="wgc-wrap"><h2 class="wgc-title">Free Rental Analysis</h2><p class="wgc-sub">Tell us about your property and the Westrom team will prepare your analysis.</p><p class="wgc-status" id="wgc-status" role="status" aria-live="polite"></p><form id="wgc-form" novalidate>'+t+'<div class="wgc-check"><input type="checkbox" id="wgc-ebook" name="ebook_opt_in"><label for="wgc-ebook">'+o(p.ebookLabel)+'</label></div><div class="wgc-hp" aria-hidden="true"><label for="wgc-fax">Fax number</label><input id="wgc-fax" name="fax" type="text" tabindex="-1" autocomplete="off"></div><button class="wgc-btn" type="submit" id="wgc-submit">Get My Free Analysis</button><p class="wgc-fineprint">'+o(p.finePrint)+'</p><a class="wgc-privacy wgc-link" href="'+o(e.privacyUrl)+'" target="_blank" rel="noopener">Privacy Policy</a></form></div>'}function le(e){return'<div class="wgc-wrap"><div class="wgc-panel" role="alert" aria-live="assertive"><h2 class="wgc-title">Something went wrong</h2><p class="wgc-sub">Your request was not sent. Please try again, or use our <a class="wgc-link" href="'+o(e.fallbackUrl)+'">rental analysis page</a>.</p><button class="wgc-btn" id="wgc-retry" type="button">Try again</button></div></div>'}function ce(e){var t=e.getAttribute("data-endpoint")||z;return{endpoint:t.replace(/\/+$/,""),source:e.getAttribute("data-source")||"Website - wgcassetguide",privacyUrl:e.getAttribute("data-privacy-url")||"https://wgcassetguide.com/privacy",fallbackUrl:e.getAttribute("data-fallback-url")||"https://wgcassetguide.com/analysis"}}function ue(e,t,n){var i={source:t.source,submission_id:n};e.dispatchEvent(new CustomEvent("wgc-lead-submitted",{bubbles:!0,composed:!0,detail:i})),window.dispatchEvent(new CustomEvent("wgc-lead-submitted",{detail:i})),Array.isArray(window.dataLayer)&&window.dataLayer.push({event:"wgc_lead_submitted",source:t.source,submission_id:n})}function M(e,t){var n=null;["name","email","phone","zip","sqft","bedrooms"].forEach(function(i){var r=e.querySelector('[name="'+i+'"]'),l=e.getElementById("wgc-err-"+i),g=t[i]||"";l&&(l.textContent=g),r&&r.setAttribute("aria-invalid",g?"true":"false"),g&&!n&&(n=r||e.querySelector(".wgc-seg [data-value]"))}),n&&typeof n.focus=="function"&&n.focus()}function F(e){if(!e)return;var t=ce(e),n=document.getElementById(oe);if(!n||n.shadowRoot)return;var i=Date.now(),r=n.attachShadow({mode:"open"}),l=document.createElement("style");l.textContent=_;var g=document.createElement("div");r.appendChild(l),r.appendChild(g);var v=L(t.endpoint);v.refresh().catch(function(){});var k=null,A="",E=!1;function N(f){var d=f.querySelector(".wgc-seg");if(!d)return;var a=Array.prototype.slice.call(d.querySelectorAll("[data-value]"));function c(u){A=u.getAttribute("data-value"),a.forEach(function(b){var s=b===u;b.setAttribute("aria-checked",s?"true":"false"),b.setAttribute("tabindex",s?"0":"-1")})}a.forEach(function(u,b){u.addEventListener("click",function(){c(u),u.focus()}),u.addEventListener("keydown",function(s){var m=-1;if(s.key==="ArrowRight"||s.key==="ArrowDown")m=(b+1)%a.length;else if(s.key==="ArrowLeft"||s.key==="ArrowUp")m=(b-1+a.length)%a.length;else if(s.key==="Home")m=0;else if(s.key==="End")m=a.length-1;else if(s.key===" "||s.key==="Enter"){s.preventDefault(),c(u);return}m>=0&&(s.preventDefault(),c(a[m]),a[m].focus())})})}function C(f){function d(a){var c=f.querySelector('[name="'+a+'"]');return c?c.value:""}return{name:d("name"),email:d("email"),phone:d("phone"),zip:d("zip"),sqft:d("sqft"),bedrooms:A}}function j(f,d){g.innerHTML='<div class="wgc-wrap">'+D(f,{ebookOptIn:d})+"</div>";var a=r.getElementById("wgc-cta");a&&a.addEventListener("click",function(){var c=r.getElementById("wgc-thanks");c&&c.removeAttribute("hidden"),a.setAttribute("hidden",""),c&&c.focus()})}function T(){g.innerHTML=se(t);var f=r.getElementById("wgc-form"),d=r.getElementById("wgc-submit"),a=r.getElementById("wgc-status");N(f),f.addEventListener("focusin",function(){v.ensureFresh()}),f.addEventListener("submit",function(c){if(c.preventDefault(),!E){var u=q(C(f));if(!u.ok){M(r,u.errors),a.textContent="Please fix the highlighted fields.",a.setAttribute("data-kind","error");return}M(r,{});var b=r.getElementById("wgc-ebook").checked;u.data.ebook_opt_in=b,k||(k=B());var s=H(u.data,{submissionId:k}),m={token:v.get()||"",honeypot:r.getElementById("wgc-fax").value,fillMs:Date.now()-i};E=!0,d.disabled=!0,a.removeAttribute("data-kind"),a.textContent="Sending your request\u2026",v.ensureFresh().then(function(w){return m.token=w||"",P(t.endpoint,s,m)}).then(function(w){j(w,b),ue(n,t,k)}).catch(function(){E=!1,g.innerHTML=le(t);var w=r.getElementById("wgc-retry");w&&w.addEventListener("click",function(){E=!1,T()})})}})}T()}var U=document.currentScript;document.readyState==="loading"?document.addEventListener("DOMContentLoaded",function(){F(U)}):F(U);})();
+(()=>{var z=`/* Compiled into the open shadow root (TD-1). System font stack only:\r
+   @font-face does not apply inside shadow roots. RTL-ready: logical\r
+   properties (margin-inline / inset-inline) instead of left/right. */\r
+\r
+:host {\r
+  all: initial;\r
+  display: block;\r
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;\r
+  color: #1a1a1a;\r
+  line-height: 1.45;\r
+}\r
+\r
+.wgc-wrap {\r
+  box-sizing: border-box;\r
+  min-height: 520px; /* reserved height: no layout shift on load */\r
+  max-width: 480px;\r
+  padding: 20px;\r
+  border: 1px solid #d9d9d9;\r
+  border-radius: 8px;\r
+  background: #ffffff;\r
+}\r
+\r
+.wgc-wrap *,\r
+.wgc-wrap *::before,\r
+.wgc-wrap *::after {\r
+  box-sizing: border-box;\r
+  font-family: inherit;\r
+}\r
+\r
+.wgc-title {\r
+  margin: 0 0 4px;\r
+  font-size: 20px;\r
+  font-weight: 700;\r
+}\r
+\r
+.wgc-sub {\r
+  margin: 0 0 16px;\r
+  font-size: 14px;\r
+  color: #444444;\r
+}\r
+\r
+.wgc-field {\r
+  margin-block-end: 12px;\r
+}\r
+\r
+.wgc-row {\r
+  display: flex;\r
+  gap: 12px;\r
+}\r
+\r
+.wgc-row .wgc-field {\r
+  flex: 1 1 0;\r
+  min-width: 0;\r
+}\r
+\r
+.wgc-label {\r
+  display: block;\r
+  margin-block-end: 4px;\r
+  font-size: 13px;\r
+  font-weight: 600;\r
+}\r
+\r
+.wgc-input {\r
+  width: 100%;\r
+  padding: 10px 12px;\r
+  font-size: 16px; /* >=16px stops iOS Safari zoom-on-focus */\r
+  border: 1px solid #8c8c8c;\r
+  border-radius: 6px;\r
+  background: #ffffff;\r
+  color: #1a1a1a;\r
+}\r
+\r
+.wgc-input:focus,\r
+.wgc-check input:focus,\r
+.wgc-seg-opt:focus,\r
+.wgc-btn:focus,\r
+.wgc-link:focus,\r
+.wgc-launcher:focus {\r
+  outline: 3px solid #1a56b0;\r
+  outline-offset: 1px;\r
+}\r
+\r
+.wgc-input[aria-invalid="true"] {\r
+  border-color: #b3261e;\r
+}\r
+\r
+.wgc-err {\r
+  display: block;\r
+  margin-block-start: 4px;\r
+  font-size: 13px;\r
+  color: #b3261e;\r
+  min-height: 1em;\r
+}\r
+\r
+/* Segmented single-select (bedrooms) */\r
+.wgc-seg {\r
+  display: flex;\r
+  gap: 8px;\r
+}\r
+\r
+.wgc-seg-opt {\r
+  flex: 1 1 0;\r
+  min-height: 44px; /* touch target */\r
+  padding: 10px 8px;\r
+  font-size: 16px;\r
+  font-weight: 600;\r
+  color: #1a56b0;\r
+  background: #ffffff;\r
+  border: 1px solid #8c8c8c;\r
+  border-radius: 6px;\r
+  cursor: pointer;\r
+}\r
+\r
+.wgc-seg-opt[aria-checked="true"] {\r
+  color: #ffffff;\r
+  background: #1a56b0;\r
+  border-color: #1a56b0;\r
+}\r
+\r
+.wgc-check {\r
+  display: flex;\r
+  gap: 8px;\r
+  align-items: flex-start;\r
+  margin-block: 14px;\r
+}\r
+\r
+.wgc-check input {\r
+  flex: 0 0 auto;\r
+  width: 18px;\r
+  height: 18px;\r
+  margin-block-start: 2px;\r
+}\r
+\r
+.wgc-check label {\r
+  font-size: 13px;\r
+  color: #333333;\r
+}\r
+\r
+.wgc-btn {\r
+  display: block;\r
+  width: 100%;\r
+  padding: 12px 16px;\r
+  font-size: 16px;\r
+  font-weight: 700;\r
+  color: #ffffff;\r
+  background: #1a56b0;\r
+  border: 0;\r
+  border-radius: 6px;\r
+  cursor: pointer;\r
+}\r
+\r
+.wgc-btn[disabled] {\r
+  background: #7a95bd;\r
+  cursor: default;\r
+}\r
+\r
+.wgc-fineprint {\r
+  margin: 10px 0 0;\r
+  font-size: 12px;\r
+  color: #555555;\r
+  text-align: center;\r
+}\r
+\r
+.wgc-privacy {\r
+  display: block;\r
+  margin-block-start: 8px;\r
+  font-size: 12px;\r
+  text-align: center;\r
+}\r
+\r
+.wgc-link {\r
+  color: #1a56b0;\r
+}\r
+\r
+.wgc-status {\r
+  margin: 0 0 12px;\r
+  font-size: 14px;\r
+}\r
+\r
+.wgc-status[data-kind="error"] {\r
+  color: #b3261e;\r
+}\r
+\r
+/* Success / result states */\r
+.wgc-panel {\r
+  min-height: 460px;\r
+  display: flex;\r
+  flex-direction: column;\r
+  justify-content: center;\r
+  text-align: center;\r
+  gap: 12px;\r
+}\r
+\r
+.wgc-result {\r
+  justify-content: flex-start;\r
+  padding-block-start: 8px;\r
+}\r
+\r
+.wgc-range {\r
+  margin: 4px 0;\r
+  font-size: 30px;\r
+  font-weight: 800;\r
+  color: #1a56b0;\r
+}\r
+\r
+.wgc-range-unit {\r
+  font-size: 16px;\r
+  font-weight: 600;\r
+  color: #444444;\r
+}\r
+\r
+.wgc-comps-heading {\r
+  margin: 8px 0 4px;\r
+  font-weight: 600;\r
+}\r
+\r
+.wgc-comps {\r
+  list-style: none;\r
+  margin: 0 0 8px;\r
+  padding: 0;\r
+  text-align: start;\r
+}\r
+\r
+.wgc-comp {\r
+  display: flex;\r
+  justify-content: space-between;\r
+  gap: 8px;\r
+  padding: 8px 0;\r
+  border-block-end: 1px solid #ececec;\r
+  font-size: 13px;\r
+}\r
+\r
+.wgc-comp-rent {\r
+  font-weight: 700;\r
+  white-space: nowrap;\r
+}\r
+\r
+.wgc-ebook-note {\r
+  color: #1a7a3c;\r
+  font-weight: 600;\r
+}\r
+\r
+.wgc-thanks {\r
+  margin-block-start: 8px;\r
+}\r
+\r
+/* Honeypot: visually removed but still in the DOM for naive bots.\r
+   display:none is deliberately avoided (some bots skip hidden fields). */\r
+.wgc-hp {\r
+  position: absolute !important;\r
+  inset-inline-start: -9999px !important;\r
+  width: 1px;\r
+  height: 1px;\r
+  overflow: hidden;\r
+}\r
+\r
+/* Popup/modal launch mode (data-mode="popup"). Approved brand chrome,\r
+   isolated to this shadow root: navy header (#002045), red CTA matching\r
+   .wgc-btn (#b61710), amber "free guide" ribbon (#e8b04b), off-white modal\r
+   body (#fbf9f8). The overlay is position:fixed so it covers the viewport\r
+   even though #wgc-analysis (the shadow host) is a small inline element --\r
+   Shadow DOM does not create a new containing block by itself. */\r
+.wgc-launcher {\r
+  display: inline-block;\r
+  padding: 12px 20px;\r
+  font-size: 16px;\r
+  font-weight: 700;\r
+  color: #ffffff;\r
+  background: #b61710;\r
+  border: 0;\r
+  border-radius: 6px;\r
+  cursor: pointer;\r
+}\r
+\r
+.wgc-launcher:hover {\r
+  background: #96120c;\r
+}\r
+\r
+.wgc-overlay {\r
+  position: fixed;\r
+  inset: 0;\r
+  z-index: 2147483000;\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: center;\r
+  padding: 16px;\r
+  overflow-y: auto;\r
+  background: rgba(0, 0, 0, 0.55);\r
+  /* opacity+visibility (not display) so the open transition is real and\r
+     the closed overlay is still un-hit-testable and out of the a11y tree. */\r
+  opacity: 0;\r
+  visibility: hidden;\r
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;\r
+}\r
+\r
+.wgc-overlay.wgc-open {\r
+  opacity: 1;\r
+  visibility: visible;\r
+  transition: opacity 0.18s ease, visibility 0s linear 0s;\r
+}\r
+\r
+@media (prefers-reduced-motion: reduce) {\r
+  .wgc-overlay {\r
+    transition: none;\r
+  }\r
+}\r
+\r
+.wgc-modal {\r
+  box-sizing: border-box;\r
+  width: 100%;\r
+  max-width: 480px;\r
+  max-height: 90vh;\r
+  overflow-y: auto;\r
+  background: #fbf9f8;\r
+  border-radius: 10px;\r
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);\r
+}\r
+\r
+.wgc-modal-header {\r
+  position: sticky;\r
+  inset-block-start: 0;\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: space-between;\r
+  gap: 12px;\r
+  padding: 14px 16px;\r
+  background: #002045;\r
+  border-start-start-radius: 10px;\r
+  border-start-end-radius: 10px;\r
+}\r
+\r
+.wgc-modal-ribbon {\r
+  font-size: 12px;\r
+  font-weight: 700;\r
+  color: #1a1200;\r
+  background: #e8b04b;\r
+  padding: 4px 10px;\r
+  border-radius: 999px;\r
+  white-space: nowrap;\r
+}\r
+\r
+.wgc-modal-close {\r
+  flex: 0 0 auto;\r
+  width: 44px;\r
+  height: 44px;\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: center;\r
+  font-size: 22px;\r
+  line-height: 1;\r
+  color: #ffffff;\r
+  background: transparent;\r
+  border: 0;\r
+  border-radius: 6px;\r
+  cursor: pointer;\r
+}\r
+\r
+.wgc-modal-close:hover {\r
+  background: rgba(255, 255, 255, 0.15);\r
+}\r
+\r
+.wgc-modal-close:focus {\r
+  outline: 3px solid #e8b04b;\r
+  outline-offset: 2px;\r
+}\r
+\r
+.wgc-modal-body {\r
+  padding: 4px;\r
+}\r
+\r
+/* The reused wgc-wrap card loses its own border/background/sizing inside\r
+   the modal -- the dialog panel supplies that chrome instead. */\r
+.wgc-modal .wgc-wrap {\r
+  border: 0;\r
+  background: transparent;\r
+  max-width: none;\r
+  min-height: 0;\r
+}\r
+`;var $=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,V=/^\d{5}$/,O=["2","3","4","5+"],A={name:{min:1,max:120},email:{max:254},sqft:{min:300,max:1e4},bedrooms:{options:O}};function J(e){let t=String(e==null?"":e).trim();return t.length<A.name.min||t.length>A.name.max?null:t}function X(e){let t=String(e==null?"":e).trim();return t.length>A.email.max||!$.test(t)?null:t}function Q(e){let t=String(e==null?"":e).trim(),n=t.replace(/\D/g,"");return t.startsWith("+")&&!t.startsWith("+1")?null:t.startsWith("+")?n.length===11?"+"+n:null:n.length===10?"+1"+n:n.length===11&&n[0]==="1"?"+"+n:null}function ee(e){let t=String(e==null?"":e).trim();return V.test(t)?t:null}function te(e){let t=String(e==null?"":e).trim();if(t==="")return null;let n=Number(t);return!Number.isFinite(n)||!Number.isInteger(n)||n<A.sqft.min||n>A.sqft.max?null:n}function ne(e){let t=String(e==null?"":e).trim();return t===""?null:O.indexOf(t)!==-1?t:void 0}function B(e){let t={},n={};return n.name=J(e.name),n.name===null&&(t.name="Enter your name."),n.email=X(e.email),n.email===null&&(t.email="Enter a valid email address."),n.phone=Q(e.phone),n.phone===null&&(t.phone="Enter a valid US phone number (10 digits)."),n.zip=ee(e.zip),n.zip===null&&(t.zip="Enter a 5-digit ZIP code."),n.sqft=te(e.sqft),n.sqft===null&&(t.sqft="Enter square footage between 300 and 10,000."),n.bedrooms=ne(e.bedrooms),n.bedrooms===void 0&&(t.bedrooms="Choose 2, 3, 4, or 5+."),Object.keys(t).length?{ok:!1,errors:t}:{ok:!0,data:n}}var re="v2-2026-07-16",N="https://main-production-bf72.up.railway.app/webhook/d043c102d78e";function D(e,t){let n=new AbortController,o=setTimeout(function(){n.abort()},1e4),r=Object.assign({},t,{signal:n.signal});return fetch(e,r).finally(function(){clearTimeout(o)})}function M(e){let t=null,n=0;function o(){return D(e+"/token",{method:"GET"}).then(function(i){if(!i.ok)throw new Error("token fetch failed: "+i.status);return i.text()}).then(function(i){return t=i.trim(),n=Date.now(),t})}function r(){return t&&Date.now()-n<36e5?Promise.resolve(t):o().catch(function(){return t})}return{refresh:o,ensureFresh:r,get:function(){return t}}}function R(){if(typeof crypto.randomUUID=="function")return crypto.randomUUID();let e=crypto.getRandomValues(new Uint8Array(16));e[6]=e[6]&15|64,e[8]=e[8]&63|128;let t=Array.prototype.map.call(e,function(n){return(n+256).toString(16).slice(1)}).join("");return t.slice(0,8)+"-"+t.slice(8,12)+"-"+t.slice(12,16)+"-"+t.slice(16,20)+"-"+t.slice(20)}function F(e,t){return{submission_id:t.submissionId,name:e.name,email:e.email,phone:e.phone,zip:e.zip,sqft:e.sqft,bedrooms:e.bedrooms==null?null:e.bedrooms,ebook_opt_in:e.ebook_opt_in===!0,consent:{implied:!0,text_version:re,ts:new Date().toISOString()}}}function H(e,t,n){let o=Object.assign({},t,{token:n.token||"",fax:n.honeypot||"",fill_ms:n.fillMs});return D(e+"/lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o)}).then(function(r){if(!r.ok)throw new Error("submit failed: "+r.status);return r.json().catch(function(){return{}})})}var w={finePrint:"By requesting your analysis, you agree Westrom Group may contact you about your property.",ebookLabel:"Also send me the free guide: How to Hire the Best Property Manager for You",ebookSent:"Your free guide is on its way to your inbox.",receivedTitle:"Request received",receivedBody:"Your analysis will be prepared by the Westrom team. We will be in touch shortly.",estimateTitle:"Your estimated rent range",compsHeading:"Recent nearby rentals",cta:"Get a free expert review",thanksTitle:"You are all set",thanksBody:"A Westrom specialist will review your property and follow up with a human-prepared analysis."};function c(e){return String(e==null?"":e).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function oe(e){return e&&typeof e=="object"&&e.estimate?"estimate":"received"}function q(e){let t=Number(e);return Number.isFinite(t)?"$"+Math.round(t).toLocaleString("en-US"):""}function P(e){return e&&e.ebookOptIn?'<p class="wgc-sub wgc-ebook-note">'+c(w.ebookSent)+"</p>":""}function ie(e){let t=[];e.zip!=null&&e.zip!==""&&t.push("ZIP "+c(e.zip)),e.beds!=null&&e.beds!==""&&t.push(c(e.beds)+" bd"),e.sqft!=null&&e.sqft!==""&&t.push(Number(e.sqft).toLocaleString("en-US")+" sqft"),e.ago_days!=null&&e.ago_days!==""&&t.push(c(e.ago_days)+" days ago");let n=q(e.rent);return'<li class="wgc-comp"><span class="wgc-comp-meta">'+t.join(" &middot; ")+"</span>"+(n?'<span class="wgc-comp-rent">'+n+"/mo</span>":"")+"</li>"}function ae(e){return'<div class="wgc-panel" role="status" aria-live="assertive"><h2 class="wgc-title" id="wgc-dyn-title">'+c(w.receivedTitle)+'</h2><p class="wgc-sub">'+c(w.receivedBody)+"</p>"+P(e)+"</div>"}function se(e,t){let n=q(e.low),o=q(e.high),r=n&&o?n+" &ndash; "+o:n||o||"",i=Array.isArray(e.comps)?e.comps.slice(0,3):[],l=i.length?'<p class="wgc-sub wgc-comps-heading">'+c(w.compsHeading)+'</p><ul class="wgc-comps">'+i.map(ie).join("")+"</ul>":"";return'<div class="wgc-panel wgc-result" role="status" aria-live="assertive"><h2 class="wgc-title" id="wgc-dyn-title">'+c(w.estimateTitle)+'</h2><p class="wgc-range">'+r+'<span class="wgc-range-unit">/mo</span></p>'+l+P(t)+'<button class="wgc-btn" type="button" id="wgc-cta">'+c(w.cta)+'</button><div class="wgc-thanks" id="wgc-thanks" hidden><h3 class="wgc-title">'+c(w.thanksTitle)+'</h3><p class="wgc-sub">'+c(w.thanksBody)+"</p></div></div>"}function U(e,t){return oe(e)==="estimate"?se(e.estimate||{},t):ae(t)}var C={defaultLaunchLabel:"Get My Free Rental Analysis",ribbon:"Free guide included",close:"Close"},le="a[href], button, input, select, textarea, [tabindex]";function j(e){var t=Array.prototype.slice.call(e.querySelectorAll(le));return t.filter(function(n){return!(n.hasAttribute("disabled")||n.getAttribute("type")==="hidden"||n.getAttribute("tabindex")==="-1")})}function ce(e,t,n){if(!e.length)return-1;var o=e.indexOf(t);return n?o<=0?e.length-1:o-1:o===-1||o===e.length-1?0:o+1}function G(e,t,n,o){var r=t.createElement("button");r.type="button",r.className="wgc-launcher",r.id="wgc-launcher",r.textContent=o||C.defaultLaunchLabel;var i=t.createElement("div");i.className="wgc-overlay",i.id="wgc-overlay";var l=t.createElement("div");l.className="wgc-modal",l.id="wgc-modal",l.setAttribute("role","dialog"),l.setAttribute("aria-modal","true"),l.setAttribute("aria-labelledby","wgc-dyn-title");var f=t.createElement("div");f.className="wgc-modal-header";var v=t.createElement("span");v.className="wgc-modal-ribbon",v.textContent=C.ribbon;var g=t.createElement("button");g.type="button",g.className="wgc-modal-close",g.id="wgc-modal-close",g.setAttribute("aria-label",C.close),g.textContent="\xD7";var x=t.createElement("div");x.className="wgc-modal-body",x.appendChild(n),f.appendChild(v),f.appendChild(g),l.appendChild(f),l.appendChild(x),i.appendChild(l);var h=!1,k=null,_="";function I(s){if(h){if(s.key==="Escape"||s.key==="Esc"){s.preventDefault(),a();return}if(s.key==="Tab"){s.preventDefault();var b=j(l);if(!b.length)return;var d=ce(b,e.activeElement,s.shiftKey);b[d].focus()}}}function S(s){s.target===i&&a()}function m(){var s=j(l);(s[0]||g).focus()}function u(){h||(h=!0,k=r,i.classList.add("wgc-open"),_=t.body.style.overflow,t.body.style.overflow="hidden",t.addEventListener("keydown",I),i.addEventListener("click",S),m())}function a(){h&&(h=!1,i.classList.remove("wgc-open"),t.body.style.overflow=_,t.removeEventListener("keydown",I),i.removeEventListener("click",S),k&&typeof k.focus=="function"&&k.focus())}function p(){h&&m()}return r.addEventListener("click",u),g.addEventListener("click",a),{launcher:r,overlay:i,dialog:l,open:u,close:a,refocusContent:p}}var de="wgc-analysis",ue=["2","3","4","5+"],T=[{name:"name",label:"Name",type:"text",required:!0,autocomplete:"name",maxlength:120,half:!1},{name:"email",label:"Email",type:"email",required:!0,autocomplete:"email",maxlength:254,half:!1},{name:"phone",label:"Phone",type:"tel",required:!0,autocomplete:"tel",maxlength:20,half:!1},{name:"zip",label:"ZIP code",type:"text",required:!0,autocomplete:"postal-code",maxlength:5,half:!0,inputmode:"numeric"},{name:"sqft",label:"Square footage",type:"text",required:!0,maxlength:6,half:!0,inputmode:"numeric",placeholder:"approximate is fine"}];function L(e){return'<div class="wgc-field"><label class="wgc-label" for="wgc-'+e.name+'">'+c(e.label)+'</label><input class="wgc-input" id="wgc-'+e.name+'" name="'+e.name+'" type="'+e.type+'" maxlength="'+e.maxlength+'"'+(e.inputmode?' inputmode="'+e.inputmode+'"':"")+(e.placeholder?' placeholder="'+c(e.placeholder)+'"':"")+(e.autocomplete?' autocomplete="'+e.autocomplete+'"':"")+(e.required?' required aria-required="true"':"")+' aria-describedby="wgc-err-'+e.name+'"><span class="wgc-err" id="wgc-err-'+e.name+'" aria-live="polite"></span></div>'}function pe(){var e=ue.map(function(t,n){return'<button type="button" class="wgc-seg-opt" role="radio" aria-checked="false" data-value="'+c(t)+'" tabindex="'+(n===0?"0":"-1")+'">'+c(t)+"</button>"}).join("");return'<div class="wgc-field"><span class="wgc-label" id="wgc-bedrooms-label">Bedrooms (optional)</span><div class="wgc-seg" role="radiogroup" aria-labelledby="wgc-bedrooms-label" aria-describedby="wgc-err-bedrooms">'+e+'</div><span class="wgc-err" id="wgc-err-bedrooms" aria-live="polite"></span></div>'}function fe(e){var t=L(T[0])+L(T[1])+L(T[2])+'<div class="wgc-row">'+L(T[3])+L(T[4])+"</div>"+pe();return'<div class="wgc-wrap"><h2 class="wgc-title" id="wgc-dyn-title">Free Rental Analysis</h2><p class="wgc-sub">Tell us about your property and the Westrom team will prepare your analysis.</p><p class="wgc-status" id="wgc-status" role="status" aria-live="polite"></p><form id="wgc-form" novalidate>'+t+'<div class="wgc-check"><input type="checkbox" id="wgc-ebook" name="ebook_opt_in"><label for="wgc-ebook">'+c(w.ebookLabel)+'</label></div><div class="wgc-hp" aria-hidden="true"><label for="wgc-fax">Fax number</label><input id="wgc-fax" name="fax" type="text" tabindex="-1" autocomplete="off"></div><button class="wgc-btn" type="submit" id="wgc-submit">Get My Free Analysis</button><p class="wgc-fineprint">'+c(w.finePrint)+'</p><a class="wgc-privacy wgc-link" href="'+c(e.privacyUrl)+'" target="_blank" rel="noopener">Privacy Policy</a></form></div>'}function ge(e){return'<div class="wgc-wrap"><div class="wgc-panel" role="alert" aria-live="assertive"><h2 class="wgc-title" id="wgc-dyn-title">Something went wrong</h2><p class="wgc-sub">Your request was not sent. Please try again, or use our <a class="wgc-link" href="'+c(e.fallbackUrl)+'">rental analysis page</a>.</p><button class="wgc-btn" id="wgc-retry" type="button">Try again</button></div></div>'}function me(e){var t=e.getAttribute("data-endpoint")||N,n=(e.getAttribute("data-mode")||"inline").toLowerCase();return{endpoint:t.replace(/\/+$/,""),source:e.getAttribute("data-source")||"Website - wgcassetguide",privacyUrl:e.getAttribute("data-privacy-url")||"https://wgcassetguide.com/privacy",fallbackUrl:e.getAttribute("data-fallback-url")||"https://wgcassetguide.com/analysis",mode:n==="popup"?"popup":"inline",launchLabel:e.getAttribute("data-launch-label")||null}}function be(e,t,n){var o={source:t.source,submission_id:n};e.dispatchEvent(new CustomEvent("wgc-lead-submitted",{bubbles:!0,composed:!0,detail:o})),window.dispatchEvent(new CustomEvent("wgc-lead-submitted",{detail:o})),Array.isArray(window.dataLayer)&&window.dataLayer.push({event:"wgc_lead_submitted",source:t.source,submission_id:n})}function W(e,t){var n=null;["name","email","phone","zip","sqft","bedrooms"].forEach(function(o){var r=e.querySelector('[name="'+o+'"]'),i=e.getElementById("wgc-err-"+o),l=t[o]||"";i&&(i.textContent=l),r&&r.setAttribute("aria-invalid",l?"true":"false"),l&&!n&&(n=r||e.querySelector(".wgc-seg [data-value]"))}),n&&typeof n.focus=="function"&&n.focus()}function Y(e){if(!e)return;var t=me(e),n=document.getElementById(de);if(!n||n.shadowRoot)return;var o=Date.now(),r=n.attachShadow({mode:"open"}),i=document.createElement("style");i.textContent=z;var l=document.createElement("div");if(r.appendChild(i),t.mode==="popup"){var f=G(r,document,l,t.launchLabel);r.appendChild(f.launcher),r.appendChild(f.overlay)}else r.appendChild(l);var v=M(t.endpoint);v.refresh().catch(function(){});var g=null,x="",h=!1;function k(m){var u=m.querySelector(".wgc-seg");if(!u)return;var a=Array.prototype.slice.call(u.querySelectorAll("[data-value]"));function p(s){x=s.getAttribute("data-value"),a.forEach(function(b){var d=b===s;b.setAttribute("aria-checked",d?"true":"false"),b.setAttribute("tabindex",d?"0":"-1")})}a.forEach(function(s,b){s.addEventListener("click",function(){p(s),s.focus()}),s.addEventListener("keydown",function(d){var y=-1;if(d.key==="ArrowRight"||d.key==="ArrowDown")y=(b+1)%a.length;else if(d.key==="ArrowLeft"||d.key==="ArrowUp")y=(b-1+a.length)%a.length;else if(d.key==="Home")y=0;else if(d.key==="End")y=a.length-1;else if(d.key===" "||d.key==="Enter"){d.preventDefault(),p(s);return}y>=0&&(d.preventDefault(),p(a[y]),a[y].focus())})})}function _(m){function u(a){var p=m.querySelector('[name="'+a+'"]');return p?p.value:""}return{name:u("name"),email:u("email"),phone:u("phone"),zip:u("zip"),sqft:u("sqft"),bedrooms:x}}function I(m,u){l.innerHTML='<div class="wgc-wrap">'+U(m,{ebookOptIn:u})+"</div>";var a=r.getElementById("wgc-cta");a&&a.addEventListener("click",function(){var p=r.getElementById("wgc-thanks");p&&p.removeAttribute("hidden"),a.setAttribute("hidden",""),p&&p.focus()}),f&&f.refocusContent()}function S(){l.innerHTML=fe(t);var m=r.getElementById("wgc-form"),u=r.getElementById("wgc-submit"),a=r.getElementById("wgc-status");k(m),m.addEventListener("focusin",function(){v.ensureFresh()}),m.addEventListener("submit",function(p){if(p.preventDefault(),!h){var s=B(_(m));if(!s.ok){W(r,s.errors),a.textContent="Please fix the highlighted fields.",a.setAttribute("data-kind","error");return}W(r,{});var b=r.getElementById("wgc-ebook").checked;s.data.ebook_opt_in=b,g||(g=R());var d=F(s.data,{submissionId:g}),y={token:v.get()||"",honeypot:r.getElementById("wgc-fax").value,fillMs:Date.now()-o};h=!0,u.disabled=!0,a.removeAttribute("data-kind"),a.textContent="Sending your request\u2026",v.ensureFresh().then(function(E){return y.token=E||"",H(t.endpoint,d,y)}).then(function(E){I(E,b),be(n,t,g)}).catch(function(){h=!1,l.innerHTML=ge(t),f&&f.refocusContent();var E=r.getElementById("wgc-retry");E&&E.addEventListener("click",function(){h=!1,S(),f&&f.refocusContent()})})}})}S()}var Z=document.currentScript;document.readyState==="loading"?document.addEventListener("DOMContentLoaded",function(){Y(Z)}):Y(Z);})();

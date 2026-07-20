@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "node widget/build.mjs",
-    "test": "node --test widget/test/validate.test.mjs widget/test/api.test.mjs widget/test/success.test.mjs estimator/test/estimate.test.mjs estimator/test/wf-estimate.test.mjs",
+    "test": "node --import ./widget/test/register-hooks.mjs --test widget/test/validate.test.mjs widget/test/api.test.mjs widget/test/success.test.mjs widget/test/modal.test.mjs widget/test/popup.test.mjs widget/test/a11y.test.mjs estimator/test/estimate.test.mjs estimator/test/wf-estimate.test.mjs",
     "check": "npm run test && npm run wf:check && npm run build",
     "estimate:index": "node estimator/build-index.mjs",
     "estimate:preview": "node estimator/preview.mjs",
@@ -19,6 +19,8 @@
     "wf:seed": "node estimator/build-seed.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1"
+    "axe-core": "^4.12.1",
+    "esbuild": "^0.28.1",
+    "jsdom": "^29.1.1"
   }
 }
