@@ -68,7 +68,7 @@ function compRow(c) {
 export function buildReceivedHtml(opts) {
   return (
     '<div class="wgc-panel" role="status" aria-live="assertive">' +
-    '<h2 class="wgc-title">' + escapeHtml(STRINGS.receivedTitle) + '</h2>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(STRINGS.receivedTitle) + '</h2>' +
     '<p class="wgc-sub">' + escapeHtml(STRINGS.receivedBody) + '</p>' +
     ebookLine(opts) +
     '</div>'
@@ -86,7 +86,7 @@ export function buildEstimateHtml(estimate, opts) {
     : '';
   return (
     '<div class="wgc-panel wgc-result" role="status" aria-live="assertive">' +
-    '<h2 class="wgc-title">' + escapeHtml(STRINGS.estimateTitle) + '</h2>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(STRINGS.estimateTitle) + '</h2>' +
     '<p class="wgc-range">' + range + '<span class="wgc-range-unit">/mo</span></p>' +
     compsHtml +
     ebookLine(opts) +

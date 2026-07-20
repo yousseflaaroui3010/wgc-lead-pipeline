@@ -13,6 +13,7 @@ import {
   DEFAULT_API_BASE,
 } from './api.js';
 import { STRINGS, buildSuccessHtml, escapeHtml } from './success.js';
+import { createModal } from './modal.js';
 
 var MOUNT_ID = 'wgc-analysis';
 var BEDROOM_OPTIONS = ['2', '3', '4', '5+'];
@@ -68,7 +69,7 @@ function formHtml(cfg) {
     bedroomsHtml();
   return (
     '<div class="wgc-wrap">' +
-    '<h2 class="wgc-title">Free Rental Analysis</h2>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">Free Rental Analysis</h2>' +
     '<p class="wgc-sub">Tell us about your property and the Westrom team will prepare your analysis.</p>' +
     '<p class="wgc-status" id="wgc-status" role="status" aria-live="polite"></p>' +
     '<form id="wgc-form" novalidate>' +
@@ -99,7 +100,7 @@ function formHtml(cfg) {
 function errorPanelHtml(cfg) {
   return (
     '<div class="wgc-wrap"><div class="wgc-panel" role="alert" aria-live="assertive">' +
-    '<h2 class="wgc-title">Something went wrong</h2>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">Something went wrong</h2>' +
     '<p class="wgc-sub">Your request was not sent. Please try again, or use our ' +
     '<a class="wgc-link" href="' + escapeHtml(cfg.fallbackUrl) + '">rental analysis page</a>.</p>' +
     '<button class="wgc-btn" id="wgc-retry" type="button">Try again</button>' +
@@ -109,11 +110,16 @@ function errorPanelHtml(cfg) {
 
 function readConfig(script) {
   var endpoint = script.getAttribute('data-endpoint') || DEFAULT_API_BASE;
+  var mode = (script.getAttribute('data-mode') || 'inline').toLowerCase();
   return {
     endpoint: endpoint.replace(/\/+$/, ''),
     source: script.getAttribute('data-source') || 'Website - wgcassetguide',
     privacyUrl: script.getAttribute('data-privacy-url') || 'https://wgcassetguide.com/privacy',
     fallbackUrl: script.getAttribute('data-fallback-url') || 'https://wgcassetguide.com/analysis',
+    // Unrecognized values fall back to today's default (inline) rather than
+    // silently rendering nothing.
+    mode: mode === 'popup' ? 'popup' : 'inline',
+    launchLabel: script.getAttribute('data-launch-label') || null,
   };
 }
 
@@ -140,7 +146,7 @@ function showFieldErrors(root, errors) {
   if (firstBad && typeof firstBad.focus === 'function') firstBad.focus();
 }
 
-function mount(script) {
+export function mount(script) {
   if (!script) return;
   var cfg = readConfig(script);
   var host = document.getElementById(MOUNT_ID);
@@ -152,7 +158,18 @@ function mount(script) {
   style.textContent = cssText;
   var container = document.createElement('div');
   shadow.appendChild(style);
-  shadow.appendChild(container);
+
+  // Popup mode: form/loading/error/success render into `container` exactly
+  // as inline mode does (renderForm/renderSuccess/errorPanelHtml below are
+  // untouched and mode-agnostic) -- createModal only moves that same node
+  // inside a WCAG dialog and adds a launcher button in front of it.
+  if (cfg.mode === 'popup') {
+    var modal = createModal(shadow, document, container, cfg.launchLabel);
+    shadow.appendChild(modal.launcher);
+    shadow.appendChild(modal.overlay);
+  } else {
+    shadow.appendChild(container);
+  }
 
   var tokens = createTokenStore(cfg.endpoint);
   tokens.refresh().catch(function () { /* retried on interaction + submit */ });

@@ -74,7 +74,8 @@
 .wgc-check input:focus,
 .wgc-seg-opt:focus,
 .wgc-btn:focus,
-.wgc-link:focus {
+.wgc-link:focus,
+.wgc-launcher:focus {
   outline: 3px solid #1a56b0;
   outline-offset: 1px;
 }
@@ -251,4 +252,127 @@
   width: 1px;
   height: 1px;
   overflow: hidden;
+}
+
+/* Popup/modal launch mode (data-mode="popup"). Approved brand chrome,
+   isolated to this shadow root: navy header (#002045), red CTA matching
+   .wgc-btn (#b61710), amber "free guide" ribbon (#e8b04b), off-white modal
+   body (#fbf9f8). The overlay is position:fixed so it covers the viewport
+   even though #wgc-analysis (the shadow host) is a small inline element --
+   Shadow DOM does not create a new containing block by itself. */
+.wgc-launcher {
+  display: inline-block;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #b61710;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wgc-launcher:hover {
+  background: #96120c;
+}
+
+.wgc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.55);
+  /* opacity+visibility (not display) so the open transition is real and
+     the closed overlay is still un-hit-testable and out of the a11y tree. */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+}
+
+.wgc-overlay.wgc-open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.18s ease, visibility 0s linear 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wgc-overlay {
+    transition: none;
+  }
+}
+
+.wgc-modal {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fbf9f8;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.wgc-modal-header {
+  position: sticky;
+  inset-block-start: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #002045;
+  border-start-start-radius: 10px;
+  border-start-end-radius: 10px;
+}
+
+.wgc-modal-ribbon {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a1200;
+  background: #e8b04b;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.wgc-modal-close {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  color: #ffffff;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wgc-modal-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.wgc-modal-close:focus {
+  outline: 3px solid #e8b04b;
+  outline-offset: 2px;
+}
+
+.wgc-modal-body {
+  padding: 4px;
+}
+
+/* The reused wgc-wrap card loses its own border/background/sizing inside
+   the modal -- the dialog panel supplies that chrome instead. */
+.wgc-modal .wgc-wrap {
+  border: 0;
+  background: transparent;
+  max-width: none;
+  min-height: 0;
 }
