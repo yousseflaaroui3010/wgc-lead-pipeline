@@ -134,6 +134,64 @@
         1100,
         0
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.payload.ebook_opt_in }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "wf2-ebook-if",
+      "name": "Ebook requested?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        220,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.BREVO_API_KEY }}"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (function(){ const p = $json.payload; const nm = (p.name || \"\").trim(); const greeting = nm ? (\"Hi \" + nm + \",\") : \"Hi,\"; const guideUrl = \"https://wgcassetguide.com/how-to-hire-the-best-property-manager.pdf\"; const html = \"<p>\" + greeting + \"</p><p>Thank you for requesting your free rental analysis from Westrom Group.</p><p>Your guide, <strong>How to Hire the Best Property Manager for You</strong>, is ready.</p><p><a href='\" + guideUrl + \"'>Download the guide</a></p><p>If you have any questions, just reply to this email.</p><p>— The Westrom Group Team</p>\"; const text = greeting + \"\\n\\nThank you for requesting your free rental analysis from Westrom Group.\\n\\nYour guide: How to Hire the Best Property Manager for You\\nDownload the guide: \" + guideUrl + \"\\n\\nIf you have any questions, just reply to this email.\\n\\n— The Westrom Group Team\"; return JSON.stringify({ sender: { email: $env.MAIL_FROM, name: \"Westrom Group\" }, to: [{ email: p.email }], subject: \"Your free guide: How to Hire the Best Property Manager\", htmlContent: html, textContent: text }); })() }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "wf2-ebook-send",
+      "name": "Send guide email (Brevo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        220
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "notes": "Fulfills the widget success-card promise (ebook_opt_in=true) via Brevo HTTP API (Railway blocks SMTP). Guide URL hardcoded (public asset, not a secret) to avoid a two-instance env var change. Best-effort: failure does not block the CRM/notify chain."
     }
   ],
   "connections": {
@@ -144,8 +202,25 @@
             "node": "CRM API attempt (mapped)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Ebook requested?",
+            "type": "main",
+            "index": 0
           }
         ]
+      ]
+    },
+    "Ebook requested?": {
+      "main": [
+        [
+          {
+            "node": "Send guide email (Brevo)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "CRM API attempt (mapped)": {
