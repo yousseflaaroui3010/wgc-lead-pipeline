@@ -226,6 +226,10 @@ export function mount(script) {
         if (thanks) thanks.focus();
       });
     }
+    // Popup mode: the submit button that held focus was just destroyed by
+    // the innerHTML swap above; put focus back inside the dialog (no-ops
+    // in inline mode / while the dialog is closed).
+    if (modal) modal.refocusContent();
   }
 
   function renderForm() {
@@ -275,8 +279,16 @@ export function mount(script) {
         .catch(function () {
           submitting = false;
           container.innerHTML = errorPanelHtml(cfg);
+          // Popup mode: same reason as renderSuccess above -- the submit
+          // button that held focus is gone.
+          if (modal) modal.refocusContent();
           var retry = shadow.getElementById('wgc-retry');
-          if (retry) retry.addEventListener('click', function () { submitting = false; renderForm(); });
+          if (retry) retry.addEventListener('click', function () {
+            submitting = false;
+            renderForm();
+            // Popup mode: renderForm() just replaced the retry button too.
+            if (modal) modal.refocusContent();
+          });
         });
     });
   }

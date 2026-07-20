@@ -95,7 +95,17 @@ export function createModal(shadow, doc, container, launchLabel) {
   var lastFocused = null;
   var savedOverflow = '';
 
+  // Bound at DOCUMENT level (not on `dialog`) while open, guarded by isOpen.
+  // Reason: renderSuccess/errorPanelHtml/retry all replace container's
+  // innerHTML while the modal is open, destroying whatever element had
+  // focus. The browser then drops focus to <body> -- OUTSIDE the dialog
+  // subtree -- and a dialog-scoped keydown listener never sees the
+  // bubbled event again, silently breaking Esc-close and the Tab trap
+  // until the user clicks back in. keydown is composed (crosses shadow
+  // boundaries), so a document-level listener still sees it regardless of
+  // where focus currently sits, inside or outside the shadow root.
   function onKeydown(e) {
+    if (!isOpen) return;
     if (e.key === 'Escape' || e.key === 'Esc') {
       e.preventDefault();
       close();
@@ -117,6 +127,11 @@ export function createModal(shadow, doc, container, launchLabel) {
     if (e.target === overlay) close();
   }
 
+  function focusFirst() {
+    var list = getFocusables(dialog);
+    (list[0] || closeBtn).focus();
+  }
+
   function open() {
     if (isOpen) return;
     isOpen = true;
@@ -124,10 +139,9 @@ export function createModal(shadow, doc, container, launchLabel) {
     overlay.classList.add('wgc-open');
     savedOverflow = doc.body.style.overflow;
     doc.body.style.overflow = 'hidden';
-    dialog.addEventListener('keydown', onKeydown);
+    doc.addEventListener('keydown', onKeydown);
     overlay.addEventListener('click', onOverlayClick);
-    var list = getFocusables(dialog);
-    (list[0] || closeBtn).focus();
+    focusFirst();
   }
 
   function close() {
@@ -135,13 +149,29 @@ export function createModal(shadow, doc, container, launchLabel) {
     isOpen = false;
     overlay.classList.remove('wgc-open');
     doc.body.style.overflow = savedOverflow;
-    dialog.removeEventListener('keydown', onKeydown);
+    doc.removeEventListener('keydown', onKeydown);
     overlay.removeEventListener('click', onOverlayClick);
     if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+  }
+
+  // Called by form.js after each popup-mode re-render of `container`
+  // (success/error/retry) so a keyboard user is never left focused on
+  // <body>. No-ops while closed (the pre-open initial renderForm() at
+  // mount time must not steal focus into a hidden dialog).
+  function refocusContent() {
+    if (!isOpen) return;
+    focusFirst();
   }
 
   launcher.addEventListener('click', open);
   closeBtn.addEventListener('click', close);
 
-  return { launcher: launcher, overlay: overlay, dialog: dialog, open: open, close: close };
+  return {
+    launcher: launcher,
+    overlay: overlay,
+    dialog: dialog,
+    open: open,
+    close: close,
+    refocusContent: refocusContent,
+  };
 }

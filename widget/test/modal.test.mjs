@@ -82,7 +82,7 @@ test('createModal: Esc closes and returns focus to the launcher', () => {
   modal.open();
   assert.notEqual(shadow.activeElement, modal.launcher);
 
-  const esc = new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+  const esc = new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true });
   modal.dialog.dispatchEvent(esc);
 
   assert.ok(!modal.overlay.classList.contains('wgc-open'));
@@ -97,7 +97,7 @@ test('createModal: Tab and Shift+Tab cycle within the dialog (close btn <-> name
   modal.open(); // focus starts on close button
 
   function tab(shiftKey) {
-    const e = new doc.defaultView.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+    const e = new doc.defaultView.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true, composed: true });
     modal.dialog.dispatchEvent(e);
     return e.defaultPrevented;
   }
@@ -141,4 +141,65 @@ test('createModal: body scroll-locked while open, restored (incl. a pre-existing
   assert.equal(doc.body.style.overflow, 'hidden');
   modal.close();
   assert.equal(doc.body.style.overflow, 'auto', 'restores the exact pre-open inline value, not a hardcoded default');
+});
+
+// Reviewer-confirmed bug (post-review fix): a state re-render (success,
+// error, retry) replaces container.innerHTML while the dialog is open,
+// destroying whatever element held focus. The browser then drops focus to
+// <body> -- outside the dialog subtree entirely. Before the fix, Esc/Tab
+// were bound on `dialog`, so a bubbled keydown from <body> never reached
+// them and both silently stopped working. Reproduce that exact sequence
+// here without going through form.js.
+test('createModal: after an in-place re-render steals focus to <body>, Esc still closes and Tab still traps', () => {
+  const { doc, shadow, container } = makeFixture();
+  const modal = createModal(shadow, doc, container, null);
+  shadow.appendChild(modal.launcher);
+  shadow.appendChild(modal.overlay);
+  modal.open();
+  assert.equal(shadow.activeElement.id, 'wgc-modal-close');
+
+  // Move focus to a control INSIDE container (as it would be at real
+  // submit time -- the user tabbed to #wgc-submit and hit it), not the
+  // close button (which lives in the header, outside container, and would
+  // survive the innerHTML swap below untouched).
+  shadow.getElementById('wgc-submit').focus();
+  assert.equal(shadow.activeElement.id, 'wgc-submit');
+
+  // Simulate the state swap: the focused control disappears, the way
+  // renderSuccess()/errorPanelHtml()/renderForm() replace container's
+  // innerHTML in form.js.
+  container.innerHTML = '<h2 id="wgc-dyn-title">Request received</h2><p>Thanks.</p>';
+  // The close button that held focus no longer exists; nothing inside the
+  // shadow tree is focused anymore (focus fell out of the dialog subtree
+  // entirely -- exactly the state a dialog-scoped keydown listener misses).
+  assert.ok(!shadow.activeElement || !modal.dialog.contains(shadow.activeElement));
+
+  // Tab must still be trapped even though focus is currently outside the
+  // dialog subtree (document-level listener, not dialog-scoped).
+  const tab = new doc.defaultView.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, composed: true });
+  doc.body.dispatchEvent(tab);
+  assert.ok(modal.dialog.contains(shadow.activeElement), 'Tab redirects focus back inside the dialog, not left on <body>');
+
+  // Esc must still close the dialog and return focus to the launcher.
+  const esc = new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true });
+  doc.body.dispatchEvent(esc);
+  assert.ok(!modal.overlay.classList.contains('wgc-open'), 'Esc still closes the dialog after a re-render');
+  assert.equal(shadow.activeElement, modal.launcher, 'focus still returns to the launcher');
+});
+
+test('createModal: refocusContent() puts focus back inside the dialog after a re-render, and no-ops while closed', () => {
+  const { doc, shadow, container } = makeFixture();
+  const modal = createModal(shadow, doc, container, null);
+  shadow.appendChild(modal.launcher);
+  shadow.appendChild(modal.overlay);
+
+  // Closed: must not steal focus into a hidden dialog (e.g. form.js's
+  // initial pre-render at mount time, before the user has opened it).
+  modal.refocusContent();
+  assert.notEqual(shadow.activeElement, shadow.getElementById('wgc-modal-close'));
+
+  modal.open();
+  container.innerHTML = '<h2 id="wgc-dyn-title">Request received</h2>';
+  modal.refocusContent();
+  assert.equal(shadow.activeElement.id, 'wgc-modal-close', 'falls back to the close button when the new content has no other focusable');
 });

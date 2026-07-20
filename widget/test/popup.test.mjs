@@ -103,7 +103,11 @@ test('popup mode: Esc closes the dialog and returns focus to the launcher', asyn
 
   launcher.click();
   const dialog = shadow.getElementById('wgc-modal');
-  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  // Esc/Tab are trapped at document level (not on `dialog`) so they keep
+  // working even if a state re-render drops focus outside the dialog
+  // subtree -- composed:true mirrors a real (always-composed) keydown
+  // crossing the shadow boundary up to that document-level listener.
+  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
 
   const overlay = shadow.getElementById('wgc-overlay');
   assert.ok(!overlay.classList.contains('wgc-open'), 'Esc closes the dialog');
@@ -123,7 +127,53 @@ test('popup mode: Tab is trapped inside the dialog (does not escape to the launc
 
   // Shift+Tab from the first focusable must wrap to the last one inside the
   // dialog, never escape backwards to the launcher behind it.
-  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, composed: true }));
   assert.notEqual(shadow.activeElement, launcher);
   assert.ok(dialog.contains(shadow.activeElement), 'focus stays inside the dialog');
+});
+
+// Reviewer-confirmed bug, reproduced end-to-end through the real submit
+// path (form.js:219 renderSuccess): the submit button held focus, the
+// success re-render destroyed it, and focus fell to <body> -- outside the
+// dialog -- silently breaking Esc/Tab until the user clicked back in.
+// modal.test.mjs already covers this at the modal.js level directly; this
+// confirms form.js's refocusContent() call sites are actually wired.
+test('popup mode: a real success submit keeps Esc/focus working afterward (reviewer-reported regression)', async () => {
+  globalThis.fetch = (url) => {
+    if (String(url).endsWith('/token')) return Promise.resolve({ ok: true, text: () => Promise.resolve('tok123') });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'received' }) });
+  };
+
+  const { mount } = await import('../src/form.js?popup-success-refocus');
+  mount(makeScript({ 'data-mode': 'popup' }));
+  const shadow = document.getElementById('wgc-analysis').shadowRoot;
+  const launcher = shadow.getElementById('wgc-launcher');
+  launcher.click();
+
+  const form = shadow.getElementById('wgc-form');
+  form.querySelector('#wgc-name').value = 'Jon Westrom';
+  form.querySelector('#wgc-email').value = 'jon@westromgroup.com';
+  form.querySelector('#wgc-phone').value = '8174451108';
+  form.querySelector('#wgc-zip').value = '76052';
+  form.querySelector('#wgc-sqft').value = '1850';
+  shadow.getElementById('wgc-submit').focus();
+
+  form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+  // Let the tokens.ensureFresh() -> submitLead() -> renderSuccess() promise
+  // chain settle (two chained fetches); a macrotask tick drains all of the
+  // pending microtasks ahead of it.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.ok(shadow.getElementById('wgc-dyn-title'), 'success content rendered inside the dialog');
+  const dialog = shadow.getElementById('wgc-modal');
+  assert.ok(
+    dialog.contains(shadow.activeElement),
+    'focus was moved back inside the dialog after the success re-render, not left outside it'
+  );
+
+  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
+  const overlay = shadow.getElementById('wgc-overlay');
+  assert.ok(!overlay.classList.contains('wgc-open'), 'Esc still closes the dialog after a real success re-render');
+  assert.equal(shadow.activeElement, launcher, 'focus still returns to the launcher');
 });
