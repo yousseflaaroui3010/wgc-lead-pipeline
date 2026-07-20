@@ -1,0 +1,31 @@
+name: gate
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }        # full history, so the commit-message check works
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Typecheck (node --check sweep; no TypeScript here)
+        run: for f in $(find widget estimator -name '*.js' -path '*/src/*' -not -path '*/node_modules/*'); do node --check "$f" || exit 1; done
+      - name: Tests
+        run: npm test
+      - name: WF drift guard (generated Compute node must match estimate.js)
+        run: npm run wf:check
+      - name: Bundle size gate (build fails over 15,360 B gzip, S2-D1)
+        run: npm run build
+      - name: Commit message format
+        run: |
+          git log origin/main..HEAD --format=%B | grep -q "INTENT:" || \
+            (echo "Missing INTENT: line in commit body" && exit 1)
+      - name: Duplication gate (fails over 3%)
+        run: npx jscpd widget/src estimator/src --threshold 3 --exit-code 1
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -39,9 +39,14 @@ services:
       - NOTIFY_EMAILS=jon@localhost.test,ashley@localhost.test,youssef@localhost.test
       - ALERT_EMAIL=alert@localhost.test
       - MAIL_FROM=pipeline@localhost.test
+      # Own-data rent estimator (PRD-03): WF-1's "Compute estimate" node reads
+      # this mounted segment index. Build it first: `npm run estimate:index`.
+      - WGC_SEGMENT_INDEX=/home/node/.n8n/wgc-estimate/segment-index.json
     volumes:
       - n8n_dev_data:/home/node/.n8n
       - ../n8n/mapping:/home/node/.n8n/wgc:ro
+      # Gitignored, client rent data — mounted read-only, never baked into git.
+      - ../estimator/dist:/home/node/.n8n/wgc-estimate:ro
 
   # Catches ALL pipeline email (parse-path, notifications, alerts).
   # UI: http://localhost:8025 — SMTP: mailpit:1025, no auth, no TLS.
