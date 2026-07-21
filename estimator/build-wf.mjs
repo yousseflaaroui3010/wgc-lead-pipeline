@@ -23,8 +23,12 @@ const END = '// <<< END GENERATED';
 function buildJsCode() {
   // estimate.js is zero-dep and only declares functions/consts, so stripping
   // `export ` yields a self-contained script defining loadIndex/estimateRent/etc.
-  const core = readFileSync(SRC, 'utf8').replace(/^export /gm, '');
-  const core2 = readFileSync(SRC2, 'utf8').replace(/^export /gm, '');
+  // Normalize CRLF -> LF so the generated jsCode is byte-identical on Windows
+  // and Linux; otherwise a Windows checkout (git autocrlf) embeds \r\n into the
+  // node and wf:check drifts against a LF CI runner.
+  const readSrc = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n').replace(/^export /gm, '');
+  const core = readSrc(SRC);
+  const core2 = readSrc(SRC2);
   // Default Code-node mode (run once for all items): use $input.all() + return
   // an array. The index is read once per execution and reused for every item.
   // Layer 1 (own leases) is primary; Layer 3 (RentCast markets) is a cached
