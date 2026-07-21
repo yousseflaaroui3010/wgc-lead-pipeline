@@ -80,3 +80,45 @@ If, after a Railway **redeploy**, estimates revert to "received", the worker's
 Rebuild + re-seed: `npm run estimate:index && npm run wf:seed`, then repeat
 STEP 1. To change the estimator logic, edit `estimator/src/estimate.js`, run
 `npm run wf:build`, commit, and re-import WF-1 (STEP 0).
+
+---
+
+## Layer 3: RentCast fallback (out-of-area zips)
+
+Layer 1 (Westrom's own leases) only answers for zips in the seeded index. When
+a lead's zip has no own-data comps, WF-1's Compute node can fall back to
+RentCast's zip-level market stats (`GET /v1/markets?zipCode=&dataType=Rental`,
+`rentalData.dataByBedrooms[]`) and return a derived rent RANGE. Logic:
+`estimator/src/rentcast.js` (pure, tested), generated into the node with
+`npm run wf:build` like Layer 1 and drift-guarded by `npm run wf:check`.
+
+**It is OFF until you set the key.** No `RENTCAST_API_KEY` = own-data only
+(today's behavior, safe). Enable it:
+
+1. Set **`RENTCAST_API_KEY`** on BOTH the n8n **main** and **worker** services
+   (queue mode: every WGC env var must exist on both). Get the key from
+   app.rentcast.io. Never commit it; it is a secret.
+2. Re-import the regenerated `n8n/workflows/wf1-intake.json` into WF-1 and
+   **Publish (Shift+P)**.
+3. Verify: submit a zip you know is NOT in the lease index. You should now get
+   an estimate card (range, no comps) instead of the "received" card. The
+   WF-1 execution's Compute node output shows `estimate.meta.source =
+   "rentcast-market"`.
+
+**Cost / caching:** free tier is **50 calls/month**. Results are cached per zip
+for **30 days** at `/home/node/.n8n/wgc-estimate/rentcast-cache.json` (override
+with `WGC_RENTCAST_CACHE`), so the first visitor to a new zip spends one call
+and everyone after is served from cache. Same ephemeral-disk caveat as the
+segment index (STEP 3): a worker redeploy without a Railway volume empties the
+cache, costing fresh calls until it re-warms.
+
+**Failure is graceful:** an API error, timeout (6s), or over-quota response
+returns no estimate, so the lead still flows and the widget shows the
+"received" card. The paid-tier upsell only matters if you exceed 50 fresh
+segments a month.
+
+**ToS flag (Jon / counsel):** we call the MARKETS endpoint (aggregate zip
+stats) and display only a single derived RANGE, never RentCast's individual
+property comps. Per FEATURE2 strategy section 4.2 that is the cheaper path, but
+displaying any provider-derived number should still be cleared against
+RentCast's Terms of Service before this is promoted to always-on.

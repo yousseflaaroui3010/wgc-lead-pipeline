@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const WF = 'n8n/workflows/wf1-intake.json';
 const SRC = 'estimator/src/estimate.js';
+const SRC2 = 'estimator/src/rentcast.js';
 const NODE = 'Compute estimate';
 const check = process.argv.includes('--check');
 
@@ -23,25 +24,65 @@ function buildJsCode() {
   // estimate.js is zero-dep and only declares functions/consts, so stripping
   // `export ` yields a self-contained script defining loadIndex/estimateRent/etc.
   const core = readFileSync(SRC, 'utf8').replace(/^export /gm, '');
+  const core2 = readFileSync(SRC2, 'utf8').replace(/^export /gm, '');
   // Default Code-node mode (run once for all items): use $input.all() + return
   // an array. The index is read once per execution and reused for every item.
+  // Layer 1 (own leases) is primary; Layer 3 (RentCast markets) is a cached
+  // fallback that only runs on a Layer-1 miss when RENTCAST_API_KEY is set.
   const glue = [
     '',
-    '// --- n8n glue: load the mounted segment index, estimate from each lead ---',
+    '// --- n8n glue: Layer 1 own-data first, RentCast markets (Layer 3) fallback ---',
     "const fs = require('fs');",
     '// n8n exposes env as $env; there is no `process` in the Code-node sandbox.',
     "const INDEX_PATH = ($env && $env.WGC_SEGMENT_INDEX) || '/home/node/.n8n/wgc-estimate/segment-index.json';",
+    "const RENTCAST_CACHE = ($env && $env.WGC_RENTCAST_CACHE) || '/home/node/.n8n/wgc-estimate/rentcast-cache.json';",
+    "const RENTCAST_KEY = ($env && $env.RENTCAST_API_KEY) || '';",
     'let __records = [];',
-    "try { __records = (JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8')).records) || []; } catch (e) { /* index missing -> no estimate; widget shows the received card */ }",
+    "try { __records = (JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8')).records) || []; } catch (e) { /* index missing -> Layer 1 empty */ }",
     'const __leases = loadIndex(__records);',
-    'return $input.all().map((__it) => {',
-    '  const __j = __it.json || {};',
-    '  const __p = __j.payload || __j; // WF-1 validate node nests the lead under .payload',
-    '  const __estimate = estimateRent({ zip: __p.zip, sqft: __p.sqft, beds: __p.bedrooms }, __leases);',
-    '  return { json: Object.assign({}, __j, __estimate ? { estimate: __estimate } : {}) };',
-    '});',
+    '// RentCast disk cache: { [zip]: { fetchedAt, rentalData } }, 30-day TTL, so',
+    "// the free tier's 50 monthly calls serve many visitors per segment.",
+    'let __cache = {};',
+    "try { __cache = JSON.parse(fs.readFileSync(RENTCAST_CACHE, 'utf8')) || {}; } catch (e) { /* no cache yet */ }",
+    'const __now = Date.now();',
+    'let __cacheDirty = false;',
+    'const __self = this; // capture node context so helpers.httpRequest resolves',
+    '',
+    '// Async because a Layer-3 cache miss calls RentCast; n8n awaits the returned',
+    '// promise. Cache hits and the no-key path never touch the network.',
+    'return (async () => {',
+    '  const __out = [];',
+    '  for (const __it of $input.all()) {',
+    '    const __j = __it.json || {};',
+    '    const __p = __j.payload || __j; // WF-1 validate node nests the lead under .payload',
+    '    let __estimate = estimateRent({ zip: __p.zip, sqft: __p.sqft, beds: __p.bedrooms }, __leases);',
+    '    if (!__estimate && RENTCAST_KEY) {',
+    "      const __zm = String(__p.zip == null ? '' : __p.zip).match(/\\d{5}/);",
+    '      if (__zm) {',
+    '        const __z = __zm[0];',
+    '        let __entry = __cache[__z];',
+    '        if (!isCacheFresh(__entry, __now)) {',
+    '          try {',
+    '            const __resp = await __self.helpers.httpRequest({',
+    "              method: 'GET', url: 'https://api.rentcast.io/v1/markets',",
+    "              qs: { zipCode: __z, dataType: 'Rental' },",
+    "              headers: { 'X-Api-Key': RENTCAST_KEY, Accept: 'application/json' },",
+    '              json: true, timeout: 6000,',
+    '            });',
+    '            __entry = { fetchedAt: new Date(__now).toISOString(), rentalData: (__resp && __resp.rentalData) || null };',
+    '            __cache[__z] = __entry; __cacheDirty = true;',
+    '          } catch (e) { __entry = null; /* API down or over quota -> received card */ }',
+    '        }',
+    '        if (__entry && __entry.rentalData) __estimate = marketToEstimate(__entry.rentalData, { beds: __p.bedrooms });',
+    '      }',
+    '    }',
+    '    __out.push({ json: Object.assign({}, __j, __estimate ? { estimate: __estimate } : {}) });',
+    '  }',
+    "  if (__cacheDirty) { try { fs.writeFileSync(RENTCAST_CACHE, JSON.stringify(__cache)); } catch (e) { /* cache is best-effort */ } }",
+    '  return __out;',
+    '})();',
   ].join('\n');
-  return `${BEGIN}\n${core}\n${END}\n${glue}\n`;
+  return `${BEGIN}\n${core}\n\n${core2}\n${END}\n${glue}\n`;
 }
 
 const wf = JSON.parse(readFileSync(WF, 'utf8'));
