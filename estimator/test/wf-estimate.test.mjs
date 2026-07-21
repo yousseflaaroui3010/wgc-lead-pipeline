@@ -36,15 +36,30 @@ function loadComputeNode() {
 // Run the node body exactly as n8n's Code node does: a function with $input and
 // require available, returning an array of items. fs is stubbed to serve the
 // fixture index from the expected path.
-function runNode(jsCode, leadItems, indexJson) {
+// Run the node body exactly as n8n's Code node does: a function with $input,
+// require, and $env in scope, `this` bound to a context that carries helpers.
+// The glue is now async (a Layer-3 miss may await RentCast), so this returns a
+// promise. fs is stubbed: the segment index and the RentCast cache are served
+// from opts, and writes are surfaced via opts.onWrite.
+async function runNode(jsCode, leadItems, indexJson, opts = {}) {
   const fakeRequire = (mod) => {
-    if (mod === 'fs') return { readFileSync: () => JSON.stringify(indexJson) };
+    if (mod === 'fs') return {
+      readFileSync: (p) => {
+        if (String(p).includes('rentcast-cache')) {
+          if (opts.cacheThrows) throw new Error('ENOENT');
+          return JSON.stringify(opts.cache || {});
+        }
+        if (opts.indexThrows) throw new Error('ENOENT');
+        return JSON.stringify(indexJson);
+      },
+      writeFileSync: (p, data) => { if (opts.onWrite) opts.onWrite(String(p), data); },
+    };
     return require(mod); // eslint-disable-line
   };
   const $input = { all: () => leadItems.map((json) => ({ json })) };
-  // n8n injects $input, require, and $env into the Code node's scope.
+  // n8n injects $input, require, $env into scope and binds `this` to the node.
   const fn = new Function('$input', 'require', '$env', jsCode);
-  return fn($input, fakeRequire, {});
+  return await fn.call(opts.thisCtx || {}, $input, fakeRequire, opts.env || {});
 }
 
 test('WF-1 wiring: Compute estimate fans out to Respond + Dispatch, response reads own input', () => {
@@ -65,33 +80,89 @@ test('WF-1 wiring: Compute estimate fans out to Respond + Dispatch, response rea
 // nested under `payload` (plus bot:false). Tests MUST use this shape.
 const leadItem = (p) => ({ bot: false, payload: p });
 
-test('generated Compute estimate node runs and attaches an estimate', () => {
-  const out = runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3', name: 'X' })], FIXTURE_INDEX);
+test('generated Compute estimate node runs and attaches an estimate', async () => {
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3', name: 'X' })], FIXTURE_INDEX);
   assert.equal(out.length, 1);
   const j = out[0].json;
   assert.equal(j.payload.name, 'X', 'passes lead fields through');
   assert.ok(j.estimate && typeof j.estimate.low === 'number' && Array.isArray(j.estimate.comps));
 });
 
-test('node output equals estimate.js for the same inputs (parity)', () => {
+test('node output equals estimate.js for the same inputs (parity)', async () => {
   const leases = loadIndexLike(FIXTURE_INDEX.records);
   const direct = estimateRent({ zip: '76052', sqft: 1350, beds: '3' }, leases);
-  const out = runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' })], FIXTURE_INDEX);
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' })], FIXTURE_INDEX);
   assert.deepEqual(out[0].json.estimate, direct);
 });
 
-test('no comparable data -> no estimate key (widget shows received card)', () => {
-  const out = runNode(loadComputeNode(), [leadItem({ zip: '99999', sqft: 1000, bedrooms: '3' })], FIXTURE_INDEX);
+test('no comparable own-data and no RentCast key -> no estimate (received card)', async () => {
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '99999', sqft: 1000, bedrooms: '3' })], FIXTURE_INDEX);
   assert.equal('estimate' in out[0].json, false);
 });
 
-test('missing/broken index -> node still returns the lead, no estimate', () => {
-  const jsCode = loadComputeNode();
-  const $input = { all: () => [{ json: leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' }) }] };
-  const throwingRequire = (mod) => (mod === 'fs' ? { readFileSync: () => { throw new Error('ENOENT'); } } : require(mod));
-  const out = new Function('$input', 'require', '$env', jsCode)($input, throwingRequire, {});
+test('missing/broken index -> node still returns the lead, no estimate', async () => {
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' })], FIXTURE_INDEX, { indexThrows: true });
   assert.equal(out.length, 1);
   assert.equal('estimate' in out[0].json, false);
+});
+
+// --- Layer 3: RentCast markets fallback (runs only on a Layer-1 miss + key) ---
+
+test('RentCast fallback: own-data miss + key set -> estimate from markets, comps empty', async () => {
+  const rentalData = { medianRent: 2000, dataByBedrooms: [{ bedrooms: 3, medianRent: 2000, totalListings: 40 }] };
+  let calls = 0;
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '99999', sqft: 1000, bedrooms: '3' })], FIXTURE_INDEX, {
+    env: { RENTCAST_API_KEY: 'test-key' },
+    thisCtx: { helpers: { httpRequest: async (o) => {
+      calls++;
+      assert.equal(o.qs.zipCode, '99999');
+      assert.equal(o.headers['X-Api-Key'], 'test-key');
+      return { rentalData };
+    } } },
+  });
+  assert.equal(calls, 1);
+  const est = out[0].json.estimate;
+  assert.ok(est, 'estimate attached from RentCast');
+  assert.equal(est.meta.source, 'rentcast-market');
+  assert.deepEqual(est.comps, []);
+});
+
+test('RentCast fallback: NOT called when own-data already answers', async () => {
+  let calls = 0;
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '76052', sqft: 1350, bedrooms: '3' })], FIXTURE_INDEX, {
+    env: { RENTCAST_API_KEY: 'test-key' },
+    thisCtx: { helpers: { httpRequest: async () => { calls++; return { rentalData: {} }; } } },
+  });
+  assert.equal(calls, 0, 'own-data hit -> no RentCast call');
+  assert.equal(out[0].json.estimate.meta.source, 'own-lease-history');
+});
+
+test('RentCast fallback: API failure -> received card, lead still flows', async () => {
+  const out = await runNode(loadComputeNode(), [leadItem({ zip: '99999', sqft: 1000, bedrooms: '3' })], FIXTURE_INDEX, {
+    env: { RENTCAST_API_KEY: 'test-key' },
+    thisCtx: { helpers: { httpRequest: async () => { throw new Error('429 over quota'); } } },
+  });
+  assert.equal(out.length, 1);
+  assert.equal('estimate' in out[0].json, false);
+});
+
+test('RentCast fallback: fresh cache serves without a call; a cold fetch writes the cache', async () => {
+  let calls = 0;
+  const cache = { '99999': { fetchedAt: new Date().toISOString(), rentalData: { medianRent: 1800, dataByBedrooms: [] } } };
+  const cached = await runNode(loadComputeNode(), [leadItem({ zip: '99999', sqft: 1000, bedrooms: '' })], FIXTURE_INDEX, {
+    env: { RENTCAST_API_KEY: 'test-key' }, cache,
+    thisCtx: { helpers: { httpRequest: async () => { calls++; return {}; } } },
+  });
+  assert.equal(calls, 0, 'fresh cache -> no network');
+  assert.ok(cached[0].json.estimate, 'served from cache');
+
+  const writes = [];
+  await runNode(loadComputeNode(), [leadItem({ zip: '88888', sqft: 1000, bedrooms: '' })], FIXTURE_INDEX, {
+    env: { RENTCAST_API_KEY: 'test-key' },
+    onWrite: (p) => writes.push(p),
+    thisCtx: { helpers: { httpRequest: async () => ({ rentalData: { medianRent: 2000, dataByBedrooms: [] } }) } },
+  });
+  assert.ok(writes.some((p) => p.includes('rentcast-cache')), 'fetched result written to cache');
 });
 
 test('the sanity check on real data (if present) produces a plausible range', () => {
