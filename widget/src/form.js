@@ -18,15 +18,17 @@ import { createModal } from './modal.js';
 var MOUNT_ID = 'wgc-analysis';
 var BEDROOM_OPTIONS = ['2', '3', '4', '5+'];
 
-// Text/number inputs. Bedrooms (segmented) and the ebook checkbox are
-// rendered separately below.
-var FIELDS = [
-  { name: 'name', label: 'Name', type: 'text', required: true, autocomplete: 'name', maxlength: 120, half: false },
-  { name: 'email', label: 'Email', type: 'email', required: true, autocomplete: 'email', maxlength: 254, half: false },
-  { name: 'phone', label: 'Phone', type: 'tel', required: true, autocomplete: 'tel', maxlength: 20, half: false },
-  { name: 'zip', label: 'ZIP code', type: 'text', required: true, autocomplete: 'postal-code', maxlength: 5, half: true, inputmode: 'numeric' },
-  { name: 'sqft', label: 'Square footage', type: 'text', required: true, maxlength: 6, half: true, inputmode: 'numeric', placeholder: 'approximate is fine' },
-];
+// Estimate-first (2026-07-22): the property fields alone drive the instant
+// estimate, so the form asks ONLY for zip + square footage (+ optional
+// bedrooms). No name/email/phone wall. Email is collected later, and only if
+// the visitor ticks the ebook consent box (which reveals FIELDS.email).
+var FIELDS = {
+  zip: { name: 'zip', label: 'ZIP code', type: 'text', required: true, autocomplete: 'postal-code', maxlength: 5, inputmode: 'numeric', placeholder: 'e.g. 76052' },
+  sqft: { name: 'sqft', label: 'Square footage', type: 'text', required: true, maxlength: 6, inputmode: 'numeric', placeholder: 'approximate is fine' },
+  // required:false -> no HTML `required` attr; validateAll makes it required
+  // ONLY when consent is checked, and wireConsent toggles aria-required.
+  email: { name: 'email', label: 'Email', type: 'email', required: false, autocomplete: 'email', maxlength: 254, placeholder: 'you@email.com' },
+};
 
 function fieldHtml(f) {
   return (
@@ -64,20 +66,26 @@ function bedroomsHtml() {
 
 function formHtml(cfg) {
   var rows =
-    fieldHtml(FIELDS[0]) + fieldHtml(FIELDS[1]) + fieldHtml(FIELDS[2]) +
-    '<div class="wgc-row">' + fieldHtml(FIELDS[3]) + fieldHtml(FIELDS[4]) + '</div>' +
+    '<div class="wgc-row">' + fieldHtml(FIELDS.zip) + fieldHtml(FIELDS.sqft) + '</div>' +
     bedroomsHtml();
   return (
     '<div class="wgc-wrap">' +
-    '<h2 class="wgc-title" id="wgc-dyn-title">Free Rental Analysis</h2>' +
-    '<p class="wgc-sub">Tell us about your property and the Westrom team will prepare your analysis.</p>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">Free Rent Estimate</h2>' +
+    '<p class="wgc-sub">Enter your property details for an instant estimated rent range. No email required.</p>' +
     '<p class="wgc-status" id="wgc-status" role="status" aria-live="polite"></p>' +
     '<form id="wgc-form" novalidate>' +
     rows +
-    // Ebook opt-in: unchecked, never blocks submission (#7).
+    // Ebook opt-in = the EXPLICIT consent to be contacted. Unchecked never
+    // blocks the estimate; checking it reveals the email field below and is
+    // the only way we collect contact info (estimate-first, 2026-07-22).
     '<div class="wgc-check">' +
-    '<input type="checkbox" id="wgc-ebook" name="ebook_opt_in">' +
+    '<input type="checkbox" id="wgc-ebook" name="ebook_opt_in"' +
+    ' aria-controls="wgc-ebook-reveal" aria-expanded="false">' +
     '<label for="wgc-ebook">' + escapeHtml(STRINGS.ebookLabel) + '</label>' +
+    '</div>' +
+    // Email reveal: hidden until the consent box is checked.
+    '<div class="wgc-reveal" id="wgc-ebook-reveal" hidden>' +
+    fieldHtml(FIELDS.email) +
     '</div>' +
     // Honeypot (bot defense). Named "fax" on purpose: bots fill plausible
     // fields, but browser autofill profiles do NOT store a fax number —
@@ -87,9 +95,7 @@ function formHtml(cfg) {
     '<label for="wgc-fax">Fax number</label>' +
     '<input id="wgc-fax" name="fax" type="text" tabindex="-1" autocomplete="off">' +
     '</div>' +
-    '<button class="wgc-btn" type="submit" id="wgc-submit">Get My Free Analysis</button>' +
-    // Implied-consent fine print under the submit button (#8).
-    '<p class="wgc-fineprint">' + escapeHtml(STRINGS.finePrint) + '</p>' +
+    '<button class="wgc-btn" type="submit" id="wgc-submit">Get My Estimate</button>' +
     '<a class="wgc-privacy wgc-link" href="' + escapeHtml(cfg.privacyUrl) +
     '" target="_blank" rel="noopener">Privacy Policy</a>' +
     '</form>' +
@@ -135,7 +141,7 @@ function dispatchDelivered(host, cfg, submissionId) {
 
 function showFieldErrors(root, errors) {
   var firstBad = null;
-  ['name', 'email', 'phone', 'zip', 'sqft', 'bedrooms'].forEach(function (name) {
+  ['zip', 'sqft', 'bedrooms', 'email'].forEach(function (name) {
     var input = root.querySelector('[name="' + name + '"]');
     var err = root.getElementById('wgc-err-' + name);
     var msg = errors[name] || '';
@@ -209,14 +215,40 @@ export function mount(script) {
       var el = form.querySelector('[name="' + name + '"]');
       return el ? el.value : '';
     }
+    var box = form.querySelector('#wgc-ebook');
     return {
-      name: val('name'), email: val('email'), phone: val('phone'),
       zip: val('zip'), sqft: val('sqft'), bedrooms: bedrooms,
+      email: val('email'), ebook_opt_in: !!(box && box.checked),
     };
   }
 
-  function renderSuccess(resp, ebookOptIn) {
-    container.innerHTML = '<div class="wgc-wrap">' + buildSuccessHtml(resp, { ebookOptIn: ebookOptIn }) + '</div>';
+  // Consent checkbox toggles the email reveal and email's required state. An
+  // un-check clears the field + its error so a stale value never submits.
+  function wireConsent(form) {
+    var box = form.querySelector('#wgc-ebook');
+    var reveal = form.querySelector('#wgc-ebook-reveal');
+    var email = form.querySelector('[name="email"]');
+    if (!box || !reveal) return;
+    box.addEventListener('change', function () {
+      var on = box.checked;
+      if (on) reveal.removeAttribute('hidden');
+      else reveal.setAttribute('hidden', '');
+      box.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (!email) return;
+      email.setAttribute('aria-required', on ? 'true' : 'false');
+      if (on) {
+        email.focus();
+      } else {
+        email.value = '';
+        email.setAttribute('aria-invalid', 'false');
+        var err = form.querySelector('#wgc-err-email');
+        if (err) err.textContent = '';
+      }
+    });
+  }
+
+  function renderSuccess(resp, opts) {
+    container.innerHTML = '<div class="wgc-wrap">' + buildSuccessHtml(resp, opts) + '</div>';
     var cta = shadow.getElementById('wgc-cta');
     if (cta) {
       cta.addEventListener('click', function () {
@@ -239,6 +271,7 @@ export function mount(script) {
     var status = shadow.getElementById('wgc-status');
 
     wireBedrooms(form);
+    wireConsent(form);
     form.addEventListener('focusin', function () { tokens.ensureFresh(); });
 
     form.addEventListener('submit', function (e) {
@@ -253,8 +286,9 @@ export function mount(script) {
         return;
       }
       showFieldErrors(shadow, {});
-      var ebookOptIn = shadow.getElementById('wgc-ebook').checked;
-      checked.data.ebook_opt_in = ebookOptIn;
+      // Opted in = consent box ticked AND a valid email captured. Only then is
+      // any contact info sent, and only then does WF-2 (guide + team) run.
+      var optedIn = checked.data.ebook_opt_in === true && !!checked.data.email;
 
       if (!submissionId) submissionId = newSubmissionId();
       var payload = buildPayload(checked.data, { submissionId: submissionId });
@@ -267,14 +301,16 @@ export function mount(script) {
       submitting = true;
       btn.disabled = true;
       status.removeAttribute('data-kind');
-      status.textContent = 'Sending your request…';
+      status.textContent = 'Getting your estimate…';
 
       tokens
         .ensureFresh()
         .then(function (token) { extras.token = token || ''; return submitLead(cfg.endpoint, payload, extras); })
         .then(function (resp) {
-          renderSuccess(resp, ebookOptIn);
-          dispatchDelivered(host, cfg, submissionId);
+          renderSuccess(resp, { ebookOptIn: optedIn, zip: checked.data.zip });
+          // A lead only exists when the visitor opted in; an estimate-only
+          // view is not a lead and must not fire the delivered event.
+          if (optedIn) dispatchDelivered(host, cfg, submissionId);
         })
         .catch(function () {
           submitting = false;

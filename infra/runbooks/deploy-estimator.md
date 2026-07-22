@@ -122,3 +122,21 @@ stats) and display only a single derived RANGE, never RentCast's individual
 property comps. Per FEATURE2 strategy section 4.2 that is the cheaper path, but
 displaying any provider-derived number should still be cleared against
 RentCast's Terms of Service before this is promoted to always-on.
+
+**Out-of-area card copy (2026-07-22):** RentCast estimates have no comps to
+list, so the widget shows "Estimate based on N active rentals in {zip}" (the
+count from `rentalData.dataByBedrooms[].totalListings`, surfaced via
+`estimate.meta.listings` + `estimate.meta.zip`). No individual listings are
+shown, so this stays inside the ToS position above.
+
+---
+
+## Estimate-first form + WF-2 gate (T-form-estimate-first, 2026-07-22)
+
+The intake form no longer collects name/phone/email up front: the estimate is
+instant from ZIP + square footage (+ optional bedrooms). Email is collected
+only if the visitor ticks the ebook consent box. Because WF-1 still dispatches
+WF-2 for every submission, **WF-2 now starts with a "Has contact?" IF** that
+stops estimate-only visitors from notifying the team / hitting the CRM. When
+deploying this change re-import BOTH `wf1-intake.json` (validate node mirrored)
+and `wf2-delivery.json` (new gate), then Publish each.

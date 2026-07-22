@@ -2,9 +2,10 @@
 // assembly, and submission with timeout gates so a slow middleware can never
 // hang the host page.
 
-// Implied-consent wording is fixed under the submit button (see form.js
-// FINE_PRINT). Any change to that copy MUST bump this version string.
-export const CONSENT_TEXT_VERSION = 'v2-2026-07-16';
+// Consent is now EXPLICIT: the visitor must tick the ebook box, whose label
+// (STRINGS.ebookLabel in success.js) is the consent wording. Any change to
+// that label MUST bump this version string. (Was implied-by-submitting in v2.)
+export const CONSENT_TEXT_VERSION = 'v3-explicit-2026-07-22';
 
 // #13 API_BASE: Railway production webhook base incl. the hook segment
 // (public by design once the form ships; bot defense is the HMAC token, not
@@ -68,24 +69,27 @@ export function newSubmissionId() {
   );
 }
 
-// Canonical payload (form v2). ip and user_agent are appended server-side by
-// WF-1; the client never self-reports either. submission_id is transit
-// plumbing for the dedupe guard, not a business field.
+// Canonical payload (estimate-first, 2026-07-22). ip and user_agent are
+// appended server-side by WF-1; the client never self-reports either.
+// submission_id is transit plumbing for the dedupe guard, not a business
+// field. name and phone are no longer collected (kept as empty strings for
+// downstream string-safety). email + consent are present ONLY when the
+// visitor opted in via the ebook checkbox; an estimate-only submission
+// carries no contact info and never dispatches the delivery workflow.
 export function buildPayload(data, ctx) {
+  var optedIn = data.ebook_opt_in === true && !!data.email;
   return {
     submission_id: ctx.submissionId,
-    name: data.name,
-    email: data.email,
-    phone: data.phone,
+    name: '',
+    email: optedIn ? data.email : '',
+    phone: '',
     zip: data.zip,
     sqft: data.sqft,
     bedrooms: data.bedrooms == null ? null : data.bedrooms,
-    ebook_opt_in: data.ebook_opt_in === true,
-    consent: {
-      implied: true,
-      text_version: CONSENT_TEXT_VERSION,
-      ts: new Date().toISOString(),
-    },
+    ebook_opt_in: optedIn,
+    consent: optedIn
+      ? { explicit: true, text_version: CONSENT_TEXT_VERSION, ts: new Date().toISOString() }
+      : null,
   };
 }
 

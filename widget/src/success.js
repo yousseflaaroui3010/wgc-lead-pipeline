@@ -8,14 +8,19 @@
 // constants — the lightweight, swappable equivalent of message keys.
 
 export const STRINGS = {
-  finePrint:
-    'By requesting your analysis, you agree Westrom Group may contact you about your property.',
+  // Doubles as the EXPLICIT consent wording (see api.js CONSENT_TEXT_VERSION):
+  // ticking this box both requests the guide and agrees to contact.
   ebookLabel:
-    'Also send me the free guide: How to Hire the Best Property Manager for You',
+    'Send me the free guide "How To Hire The Best Property Manager." I agree Westrom Group may email me about my property.',
   ebookSent: 'Your free guide is on its way to your inbox.',
   receivedTitle: 'Request received',
   receivedBody:
-    'Your analysis will be prepared by the Westrom team. We will be in touch shortly.',
+    'A Westrom specialist will review your property and follow up shortly.',
+  // Shown when we could not produce an instant estimate AND have no contact
+  // info to follow up with (so we make no promise we cannot keep).
+  noEstimateTitle: 'Estimate not available yet',
+  noEstimateBody:
+    'We could not generate an instant estimate for that ZIP right now. For a full, human-prepared analysis, check the free-guide box and our team will help.',
   estimateTitle: 'Your estimated rent range',
   compsHeading: 'Recent nearby rentals',
   cta: 'Get a free expert review',
@@ -65,36 +70,64 @@ function compRow(c) {
   );
 }
 
+// Non-estimate card. If the visitor opted in we have contact info and can
+// promise follow-up (receivedBody); otherwise we made no estimate AND cannot
+// reach them, so the copy invites the guide path instead (noEstimateBody).
 export function buildReceivedHtml(opts) {
+  const optedIn = !!(opts && opts.ebookOptIn);
+  const title = optedIn ? STRINGS.receivedTitle : STRINGS.noEstimateTitle;
+  const body = optedIn ? STRINGS.receivedBody : STRINGS.noEstimateBody;
   return (
     '<div class="wgc-panel" role="status" aria-live="assertive">' +
-    '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(STRINGS.receivedTitle) + '</h2>' +
-    '<p class="wgc-sub">' + escapeHtml(STRINGS.receivedBody) + '</p>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(title) + '</h2>' +
+    '<p class="wgc-sub">' + escapeHtml(body) + '</p>' +
     ebookLine(opts) +
     '</div>'
   );
+}
+
+// The basis line under the range: real own-data comps when we have them,
+// otherwise a "based on N active rentals in {zip}" count for the RentCast
+// market source (we do not display individual provider listings; the count
+// keeps the card from looking empty out-of-area).
+function basisHtml(estimate, opts) {
+  const comps = Array.isArray(estimate.comps) ? estimate.comps.slice(0, 3) : [];
+  if (comps.length) {
+    return '<p class="wgc-sub wgc-comps-heading">' + escapeHtml(STRINGS.compsHeading) + '</p>' +
+      '<ul class="wgc-comps">' + comps.map(compRow).join('') + '</ul>';
+  }
+  const meta = estimate.meta || {};
+  const n = Number(meta.listings);
+  if (Number.isFinite(n) && n > 0) {
+    const zip = meta.zip || (opts && opts.zip) || '';
+    const noun = n === 1 ? 'active rental' : 'active rentals';
+    const where = zip ? ' in ' + zip : '';
+    return '<p class="wgc-sub wgc-basis">' +
+      escapeHtml('Estimate based on ' + n.toLocaleString('en-US') + ' ' + noun + where) + '</p>';
+  }
+  return '';
 }
 
 export function buildEstimateHtml(estimate, opts) {
   const low = money(estimate.low);
   const high = money(estimate.high);
   const range = low && high ? low + ' &ndash; ' + high : (low || high || '');
-  const comps = Array.isArray(estimate.comps) ? estimate.comps.slice(0, 3) : [];
-  const compsHtml = comps.length
-    ? '<p class="wgc-sub wgc-comps-heading">' + escapeHtml(STRINGS.compsHeading) + '</p>' +
-      '<ul class="wgc-comps">' + comps.map(compRow).join('') + '</ul>'
+  // The expert-review CTA only appears when the visitor consented (checked the
+  // box + gave an email); with no contact info there is nothing to route.
+  const ctaHtml = (opts && opts.ebookOptIn)
+    ? '<button class="wgc-btn" type="button" id="wgc-cta">' + escapeHtml(STRINGS.cta) + '</button>' +
+      '<div class="wgc-thanks" id="wgc-thanks" hidden>' +
+      '<h3 class="wgc-title">' + escapeHtml(STRINGS.thanksTitle) + '</h3>' +
+      '<p class="wgc-sub">' + escapeHtml(STRINGS.thanksBody) + '</p>' +
+      '</div>'
     : '';
   return (
     '<div class="wgc-panel wgc-result" role="status" aria-live="assertive">' +
     '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(STRINGS.estimateTitle) + '</h2>' +
     '<p class="wgc-range">' + range + '<span class="wgc-range-unit">/mo</span></p>' +
-    compsHtml +
+    basisHtml(estimate, opts) +
     ebookLine(opts) +
-    '<button class="wgc-btn" type="button" id="wgc-cta">' + escapeHtml(STRINGS.cta) + '</button>' +
-    '<div class="wgc-thanks" id="wgc-thanks" hidden>' +
-    '<h3 class="wgc-title">' + escapeHtml(STRINGS.thanksTitle) + '</h3>' +
-    '<p class="wgc-sub">' + escapeHtml(STRINGS.thanksBody) + '</p>' +
-    '</div>' +
+    ctaHtml +
     '</div>'
   );
 }

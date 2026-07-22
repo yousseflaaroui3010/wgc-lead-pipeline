@@ -60,7 +60,7 @@ function bandFromStats(stats, step) {
 /**
  * Map a RentCast /markets rentalData object to the estimate shape.
  * @param {object} rentalData  the rentalData field from the markets response
- * @param {{beds?:string|number}} query
+ * @param {{beds?:string|number, zip?:string}} query
  * @param {{roundStep?:number}} [opts]
  * @returns {{low:number, high:number, comps:Array, meta:object} | null}
  *          null when there is no usable rental statistic (caller then shows the
@@ -80,7 +80,10 @@ export function marketToEstimate(rentalData, query, opts = {}) {
     meta: {
       source: 'rentcast-market',
       beds: byBed ? Number(byBed.bedrooms) : null,
+      // Count + zip power the widget's "based on N active rentals in {zip}"
+      // basis line (we never display individual provider listings).
       listings: Number(stats.totalListings) || null,
+      zip: query && query.zip != null ? String(query.zip) : null,
     },
   };
 }

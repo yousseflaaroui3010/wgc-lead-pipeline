@@ -136,6 +136,16 @@
   color: #333333;
 }
 
+/* Email reveal: shown only after the consent box is checked. Explicit
+   display rule so the `hidden` attribute is honored inside the shadow root. */
+.wgc-reveal {
+  margin-block-start: 4px;
+}
+
+.wgc-reveal[hidden] {
+  display: none;
+}
+
 .wgc-btn {
   display: block;
   width: 100%;
@@ -212,6 +222,14 @@
 .wgc-comps-heading {
   margin: 8px 0 4px;
   font-weight: 600;
+}
+
+/* Out-of-area basis line ("Estimate based on N active rentals in {zip}")
+   shown in place of comps when the number comes from RentCast market stats. */
+.wgc-basis {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: #555555;
 }
 
 .wgc-comps {

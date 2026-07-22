@@ -77,7 +77,7 @@ function buildJsCode() {
     '            __cache[__z] = __entry; __cacheDirty = true;',
     '          } catch (e) { __entry = null; /* API down or over quota -> received card */ }',
     '        }',
-    '        if (__entry && __entry.rentalData) __estimate = marketToEstimate(__entry.rentalData, { beds: __p.bedrooms });',
+    '        if (__entry && __entry.rentalData) __estimate = marketToEstimate(__entry.rentalData, { beds: __p.bedrooms, zip: __z });',
     '      }',
     '    }',
     '    __out.push({ json: Object.assign({}, __j, __estimate ? { estimate: __estimate } : {}) });',

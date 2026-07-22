@@ -150,10 +150,8 @@ test('popup mode: a real success submit keeps Esc/focus working afterward (revie
   const launcher = shadow.getElementById('wgc-launcher');
   launcher.click();
 
+  // Estimate-first: the instant path needs only zip + sqft (no contact wall).
   const form = shadow.getElementById('wgc-form');
-  form.querySelector('#wgc-name').value = 'Jon Westrom';
-  form.querySelector('#wgc-email').value = 'jon@westromgroup.com';
-  form.querySelector('#wgc-phone').value = '8174451108';
   form.querySelector('#wgc-zip').value = '76052';
   form.querySelector('#wgc-sqft').value = '1850';
   shadow.getElementById('wgc-submit').focus();

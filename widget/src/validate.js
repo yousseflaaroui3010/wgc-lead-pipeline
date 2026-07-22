@@ -13,7 +13,8 @@ export const RULES = {
   bedrooms: { options: BEDROOMS_OPTIONS },
 };
 
-// Single "Name" field (v2 merged first+last). Required.
+// Single "Name" field (v2 merged first+last). Retained as a pure helper;
+// no longer part of validateAll since estimate-first dropped the name field.
 export function validateName(value) {
   const v = String(value == null ? '' : value).trim();
   if (v.length < RULES.name.min || v.length > RULES.name.max) return null;
@@ -67,18 +68,15 @@ export function validateBedrooms(value) {
 
 // Validates the raw field map from the form. Returns
 // { ok: true, data } or { ok: false, errors: { field: message } }.
+//
+// Estimate-first (2026-07-22): the property fields alone (zip + sqft, beds
+// optional) produce the instant estimate, so NAME and PHONE are no longer
+// collected and are never required. Contact is opt-in: only when the visitor
+// checks the ebook consent box (fields.ebook_opt_in) is EMAIL required. An
+// un-checked submission carries no contact info by design.
 export function validateAll(fields) {
   const errors = {};
   const data = {};
-
-  data.name = validateName(fields.name);
-  if (data.name === null) errors.name = 'Enter your name.';
-
-  data.email = validateEmail(fields.email);
-  if (data.email === null) errors.email = 'Enter a valid email address.';
-
-  data.phone = normalizePhone(fields.phone);
-  if (data.phone === null) errors.phone = 'Enter a valid US phone number (10 digits).';
 
   data.zip = validateZip(fields.zip);
   if (data.zip === null) errors.zip = 'Enter a 5-digit ZIP code.';
@@ -88,6 +86,14 @@ export function validateAll(fields) {
 
   data.bedrooms = validateBedrooms(fields.bedrooms);
   if (data.bedrooms === undefined) errors.bedrooms = 'Choose 2, 3, 4, or 5+.';
+
+  data.ebook_opt_in = fields.ebook_opt_in === true;
+  if (data.ebook_opt_in) {
+    data.email = validateEmail(fields.email);
+    if (data.email === null) errors.email = 'Enter a valid email address.';
+  } else {
+    data.email = null;
+  }
 
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data };
 }

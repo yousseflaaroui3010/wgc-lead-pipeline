@@ -15,14 +15,21 @@ test('detectShape: presence of estimate selects the card', () => {
   assert.equal(detectShape(null), 'received');
 });
 
-test('received shape renders the request-received message', () => {
-  const html = buildSuccessHtml({ status: 'received' }, { ebookOptIn: false });
+test('non-estimate shape: opted-in gets the follow-up message, no CTA', () => {
+  const html = buildSuccessHtml({ status: 'received' }, { ebookOptIn: true });
   assert.ok(html.includes(STRINGS.receivedTitle));
   assert.ok(html.includes(STRINGS.receivedBody));
   assert.ok(!html.includes('wgc-cta'), 'received shape has no estimate CTA');
 });
 
-test('estimate shape renders range, up to 3 comps, and the CTA', () => {
+test('non-estimate shape: not opted in promises nothing we cannot keep', () => {
+  const html = buildSuccessHtml({ status: 'received' }, { ebookOptIn: false });
+  assert.ok(html.includes(STRINGS.noEstimateTitle));
+  assert.ok(html.includes(STRINGS.noEstimateBody));
+  assert.ok(!html.includes(STRINGS.receivedBody), 'no "we will follow up" when we have no contact info');
+});
+
+test('estimate shape renders range and up to 3 comps', () => {
   const estimate = {
     low: 1800, high: 2100,
     comps: [
@@ -35,10 +42,36 @@ test('estimate shape renders range, up to 3 comps, and the CTA', () => {
   const html = buildSuccessHtml({ estimate }, { ebookOptIn: false });
   assert.ok(html.includes('$1,800'));
   assert.ok(html.includes('$2,100'));
-  assert.ok(html.includes(STRINGS.cta));
-  assert.ok(html.includes('wgc-thanks'), 'hidden thank-you block is present for the CTA to reveal');
   // Only 3 comps rendered even though 4 were supplied.
   assert.equal((html.match(/class="wgc-comp"/g) || []).length, 3);
+});
+
+test('expert-review CTA appears only when the visitor opted in (consent gate)', () => {
+  const estimate = { low: 1800, high: 2100, comps: [] };
+  const gated = buildSuccessHtml({ estimate }, { ebookOptIn: false });
+  assert.ok(!gated.includes('wgc-cta'), 'no CTA without contact info to route');
+  assert.ok(!gated.includes('wgc-thanks'));
+
+  const shown = buildSuccessHtml({ estimate }, { ebookOptIn: true });
+  assert.ok(shown.includes(STRINGS.cta));
+  assert.ok(shown.includes('wgc-thanks'), 'hidden thank-you block present for the CTA to reveal');
+});
+
+test('out-of-area (RentCast market source): shows "based on N active rentals in {zip}", no comps', () => {
+  const estimate = {
+    low: 3700, high: 4300, comps: [],
+    meta: { source: 'rentcast-market', beds: 3, listings: 42, zip: '78704' },
+  };
+  const html = buildSuccessHtml({ estimate }, { ebookOptIn: false });
+  assert.ok(html.includes('Estimate based on 42 active rentals in 78704'));
+  assert.ok(!html.includes('class="wgc-comp"'), 'never renders individual provider listings');
+  assert.ok(!html.includes(STRINGS.compsHeading), 'no comps heading when there are no comps');
+});
+
+test('estimate with neither comps nor a listings count: range only, no basis line', () => {
+  const html = buildSuccessHtml({ estimate: { low: 1, high: 2, comps: [] } }, { ebookOptIn: false });
+  assert.ok(!html.includes('wgc-basis'));
+  assert.ok(!html.includes('active rental'));
 });
 
 test('ebook line appears only when opted in (#12)', () => {
