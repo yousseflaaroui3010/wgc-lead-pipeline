@@ -192,6 +192,26 @@
       "waitBetweenTries": 3000,
       "onError": "continueRegularOutput",
       "notes": "Fulfills the widget success-card promise (ebook_opt_in=true) via Brevo HTTP API (Railway blocks SMTP). Guide URL hardcoded (public asset, not a secret) to avoid a two-instance env var change. Best-effort: failure does not block the CRM/notify chain."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.payload.email }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "wf2-has-contact",
+      "name": "Has contact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        110,
+        0
+      ]
     }
   ],
   "connections": {
@@ -199,12 +219,7 @@
       "main": [
         [
           {
-            "node": "CRM API attempt (mapped)",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Ebook requested?",
+            "node": "Has contact?",
             "type": "main",
             "index": 0
           }
@@ -272,6 +287,23 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Has contact?": {
+      "main": [
+        [
+          {
+            "node": "CRM API attempt (mapped)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ebook requested?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

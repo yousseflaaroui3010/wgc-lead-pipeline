@@ -68,25 +68,36 @@ test('bedrooms: optional segmented enum 2/3/4/5+', () => {
   assert.equal(validateBedrooms('three'), undefined);
 });
 
-test('validateAll: happy path normalizes and passes (bedrooms optional)', () => {
-  const res = validateAll({
-    name: 'Jon Westrom', email: 'jon@westromgroup.com',
-    phone: '(817) 445-1108', zip: '76052', sqft: '1850', bedrooms: '',
-  });
+test('validateAll: estimate-only (no consent) passes on zip + sqft, collects no contact', () => {
+  const res = validateAll({ zip: '76052', sqft: '1850', bedrooms: '' });
   assert.equal(res.ok, true);
-  assert.equal(res.data.phone, '+18174451108');
   assert.equal(res.data.zip, '76052');
   assert.equal(res.data.sqft, 1850);
   assert.equal(res.data.bedrooms, null);
+  assert.equal(res.data.ebook_opt_in, false);
+  assert.equal(res.data.email, null);
+  assert.ok(!('name' in res.data) && !('phone' in res.data), 'name/phone are no longer collected');
 });
 
-test('validateAll: collects required-field errors, ignores skipped bedrooms', () => {
-  const res = validateAll({
-    name: '', email: 'bad', phone: '123', zip: '7', sqft: '50', bedrooms: '',
-  });
+test('validateAll: consent checked requires a valid email', () => {
+  const bad = validateAll({ zip: '76052', sqft: '1850', bedrooms: '3', ebook_opt_in: true, email: 'nope' });
+  assert.equal(bad.ok, false);
+  assert.deepEqual(Object.keys(bad.errors), ['email']);
+
+  const good = validateAll({ zip: '76052', sqft: '1850', bedrooms: '3', ebook_opt_in: true, email: 'jon@westromgroup.com' });
+  assert.equal(good.ok, true);
+  assert.equal(good.data.email, 'jon@westromgroup.com');
+  assert.equal(good.data.ebook_opt_in, true);
+});
+
+test('validateAll: email is ignored (null) when the consent box is unchecked', () => {
+  const res = validateAll({ zip: '76052', sqft: '1850', email: 'not-validated-when-unchecked', ebook_opt_in: false });
+  assert.equal(res.ok, true);
+  assert.equal(res.data.email, null);
+});
+
+test('validateAll: collects only property-field errors when not opted in', () => {
+  const res = validateAll({ zip: '7', sqft: '50', bedrooms: '' });
   assert.equal(res.ok, false);
-  assert.deepEqual(
-    Object.keys(res.errors).sort(),
-    ['email', 'name', 'phone', 'sqft', 'zip']
-  );
+  assert.deepEqual(Object.keys(res.errors).sort(), ['sqft', 'zip']);
 });

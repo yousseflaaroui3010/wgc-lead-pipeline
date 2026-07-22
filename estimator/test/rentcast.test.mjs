@@ -48,6 +48,11 @@ test('marketToEstimate: median-centered band around the matched bedroom', () => 
   assert.ok(est.high > est.low);
 });
 
+test('marketToEstimate: passes the queried zip into meta for the widget basis line', () => {
+  assert.equal(marketToEstimate(rentalData, { beds: '3', zip: '78704' }).meta.zip, '78704');
+  assert.equal(marketToEstimate(rentalData, { beds: '3' }).meta.zip, null);
+});
+
 test('marketToEstimate: falls back to the overall aggregate when beds has no entry', () => {
   const est = marketToEstimate(rentalData, { beds: '4' });
   assert.ok(est, 'still returns an estimate from the zip aggregate');
