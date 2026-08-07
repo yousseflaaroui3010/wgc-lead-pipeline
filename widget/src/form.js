@@ -14,6 +14,7 @@ import {
 } from './api.js';
 import { STRINGS, buildSuccessHtml, escapeHtml } from './success.js';
 import { createModal } from './modal.js';
+import { createFeatureLayout } from './feature.js';
 
 var MOUNT_ID = 'wgc-analysis';
 var BEDROOM_OPTIONS = ['2', '3', '4', '5+'];
@@ -56,7 +57,8 @@ function bedroomsHtml() {
   }).join('');
   return (
     '<div class="wgc-field">' +
-    '<span class="wgc-label" id="wgc-bedrooms-label">Bedrooms (optional)</span>' +
+    '<span class="wgc-label" id="wgc-bedrooms-label">' + escapeHtml(STRINGS.bedroomsLabel) +
+    ' <span class="wgc-optional">' + escapeHtml(STRINGS.optionalSuffix) + '</span></span>' +
     '<div class="wgc-seg" role="radiogroup" aria-labelledby="wgc-bedrooms-label"' +
     ' aria-describedby="wgc-err-bedrooms">' + opts + '</div>' +
     '<span class="wgc-err" id="wgc-err-bedrooms" aria-live="polite"></span>' +
@@ -70,8 +72,8 @@ function formHtml(cfg) {
     bedroomsHtml();
   return (
     '<div class="wgc-wrap">' +
-    '<h2 class="wgc-title" id="wgc-dyn-title">Free Rent Estimate</h2>' +
-    '<p class="wgc-sub">Enter your property details for an instant estimated rent range. No email required.</p>' +
+    '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(STRINGS.formTitle) + '</h2>' +
+    '<p class="wgc-sub">' + escapeHtml(STRINGS.formSub) + '</p>' +
     '<p class="wgc-status" id="wgc-status" role="status" aria-live="polite"></p>' +
     '<form id="wgc-form" novalidate>' +
     rows +
@@ -95,7 +97,7 @@ function formHtml(cfg) {
     '<label for="wgc-fax">Fax number</label>' +
     '<input id="wgc-fax" name="fax" type="text" tabindex="-1" autocomplete="off">' +
     '</div>' +
-    '<button class="wgc-btn" type="submit" id="wgc-submit">Get My Estimate</button>' +
+    '<button class="wgc-btn" type="submit" id="wgc-submit">' + escapeHtml(STRINGS.submitLabel) + '</button>' +
     '<a class="wgc-privacy wgc-link" href="' + escapeHtml(cfg.privacyUrl) +
     '" target="_blank" rel="noopener">Privacy Policy</a>' +
     '</form>' +
@@ -117,6 +119,7 @@ function errorPanelHtml(cfg) {
 function readConfig(script) {
   var endpoint = script.getAttribute('data-endpoint') || DEFAULT_API_BASE;
   var mode = (script.getAttribute('data-mode') || 'inline').toLowerCase();
+  var layout = (script.getAttribute('data-layout') || 'compact').toLowerCase();
   return {
     endpoint: endpoint.replace(/\/+$/, ''),
     source: script.getAttribute('data-source') || 'Website - wgcassetguide',
@@ -125,6 +128,11 @@ function readConfig(script) {
     // Unrecognized values fall back to today's default (inline) rather than
     // silently rendering nothing.
     mode: mode === 'popup' ? 'popup' : 'inline',
+    // "feature" = the branded section chrome from the pricing-page handoff
+    // (section heading + black guarantee-recap column). "compact" = the bare
+    // card, which is what every existing embed keeps getting by default.
+    // Ignored in popup mode: the dialog supplies its own chrome.
+    layout: layout === 'feature' ? 'feature' : 'compact',
     launchLabel: script.getAttribute('data-launch-label') || null,
   };
 }
@@ -173,6 +181,10 @@ export function mount(script) {
     var modal = createModal(shadow, document, container, cfg.launchLabel);
     shadow.appendChild(modal.launcher);
     shadow.appendChild(modal.overlay);
+  } else if (cfg.layout === 'feature') {
+    // Same contract as createModal: the chrome takes `container` in and
+    // form.js keeps rendering every state into that same node, unaware.
+    shadow.appendChild(createFeatureLayout(document, container));
   } else {
     shadow.appendChild(container);
   }
@@ -281,7 +293,7 @@ export function mount(script) {
       var checked = validateAll(collectFields(form));
       if (!checked.ok) {
         showFieldErrors(shadow, checked.errors);
-        status.textContent = 'Please fix the highlighted fields.';
+        status.textContent = STRINGS.fixFields;
         status.setAttribute('data-kind', 'error');
         return;
       }
@@ -300,8 +312,12 @@ export function mount(script) {
 
       submitting = true;
       btn.disabled = true;
+      // Loading state per the handoff: the button itself carries the label
+      // (no spinner overlay). The status line stays because it is the
+      // aria-live region a screen reader actually announces.
+      btn.textContent = STRINGS.calculating;
       status.removeAttribute('data-kind');
-      status.textContent = 'Getting your estimate…';
+      status.textContent = STRINGS.submitting;
 
       tokens
         .ensureFresh()
