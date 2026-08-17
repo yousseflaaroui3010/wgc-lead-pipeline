@@ -72,13 +72,37 @@ test('data-layout="feature": section heading + guarantee recap wrap the form', a
   assert.ok(shadow.querySelector('.wgc-panel-grid .wgc-wrap'), 'form card sits in the grid');
 });
 
-test('feature layout: the eviction recap row names no dollar figure (parked: $750 vs $1,000)', async () => {
-  const { mount } = await import('../src/form.js?feat-evict');
+// Ashley and Jon: the Guarantees graphic sits directly above this section, so
+// the panel must not repeat it. This test is the lock on that instruction -- it
+// fails the moment guarantee wording or an unsourced figure creeps back in.
+test('feature layout: the panel repeats no guarantee content and prints no figures', async () => {
+  const { mount } = await import('../src/form.js?feat-nodupe');
   mount(makeScript({ 'data-layout': 'feature' }));
   const shadow = document.getElementById('wgc-analysis').shadowRoot;
-  const text = shadow.querySelector('.wgc-recap-list').textContent;
-  assert.match(text, /Eviction protection/);
-  assert.doesNotMatch(text, /\$/, 'no amount until the client resolves the conflict');
+  const panel = shadow.querySelector('.wgc-recap').textContent;
+
+  assert.doesNotMatch(panel, /guarantee/i, 'guarantees live in their own section above');
+  assert.doesNotMatch(panel, /eviction|money back|tenant placement/i);
+  // Every number Westrom publishes about itself currently conflicts with
+  // another number it publishes (reviews: 400+ / 320+ / 432+; units: 515+ on
+  // lead-gen sites only). The only sourced figure allowed is the 1994 start
+  // date, which the BBB record carries.
+  assert.doesNotMatch(panel, /\$/, 'no dollar figures');
+  assert.doesNotMatch(panel, /\d+\s*\+/, 'no "N+" counts until Jon confirms one');
+  assert.match(panel, /1994/, 'the one sourced number stays');
+});
+
+test('feature layout: recap rows use decorative marks, not numerals', async () => {
+  const { mount } = await import('../src/form.js?feat-mark');
+  mount(makeScript({ 'data-layout': 'feature' }));
+  const shadow = document.getElementById('wgc-analysis').shadowRoot;
+  const marks = shadow.querySelectorAll('.wgc-recap-mark');
+  assert.equal(marks.length, 3);
+  marks.forEach(function (m) {
+    assert.equal(m.textContent, '', 'the mark carries no text');
+    assert.equal(m.getAttribute('aria-hidden'), 'true');
+  });
+  assert.equal(shadow.querySelector('.wgc-recap-num'), null, 'old numbered circle is gone');
 });
 
 test('feature layout: chrome survives a container state swap (the reason it is a sibling)', async () => {

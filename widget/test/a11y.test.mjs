@@ -73,7 +73,7 @@ test('axe: inline mode form is clean', async () => {
   assert.equal(results.violations.length, 0, summarize(results));
 });
 
-test('axe: feature layout (section chrome + guarantee recap) is clean', async () => {
+test('axe: feature layout (section chrome + credibility panel) is clean', async () => {
   const { mount } = await import('../src/form.js?axe-feature');
   mount(makeScript({ 'data-layout': 'feature' }));
   const results = await axe.run(dom.window.document, AXE_OPTIONS);

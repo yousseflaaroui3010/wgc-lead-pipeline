@@ -160,17 +160,14 @@
   align-items: flex-start;
 }
 
-.wgc-recap-num {
+/* Decorative row marker. Was a 34px numbered circle indexing into the
+   Guarantees graphic; that content is gone, so the numerals went with it. */
+.wgc-recap-mark {
   flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 2px solid var(--wgc-red);
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 800;
+  width: 16px;
+  height: 3px;
+  margin-block-start: 9px; /* sits on the first line's optical centre */
+  background: var(--wgc-red);
 }
 
 .wgc-recap-text {
@@ -242,14 +239,13 @@
   }
 
   .wgc-recap-item {
-    align-items: center;
+    align-items: flex-start;
     gap: 11px;
   }
 
-  .wgc-recap-num {
-    width: 26px;
-    height: 26px;
-    font-size: 10px;
+  .wgc-recap-mark {
+    width: 12px;
+    margin-block-start: 7px;
   }
 
   .wgc-recap-text {
