@@ -3,13 +3,13 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "wf3-error",
+      "id": "5b46a767-9583-45af-bdb0-16fbbac7fe86",
       "name": "Any workflow errored",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
         0,
-        -240
+        0
       ]
     },
     {
@@ -36,13 +36,13 @@
           "timeout": 15000
         }
       },
-      "id": "wf3-error-mail",
+      "id": "6a7b4cd4-eada-488f-ac8a-372763ff08e2",
       "name": "Error alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        220,
-        -240
+        224,
+        0
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -59,28 +59,28 @@
           ]
         }
       },
-      "id": "wf3-daily",
+      "id": "075b11f3-0fad-4ad6-879c-afc5b5903e1d",
       "name": "Daily 18:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
         0,
-        0
+        240
       ],
       "notes": "Container TZ is America/Chicago (compose GENERIC_TIMEZONE)."
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Zero-submission-day check (PRD NFR-Reliability): a silently broken form\n// looks exactly like a quiet day, so alert on zero and let a human look.\nconst fs = require('fs');\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync('/home/node/.n8n/wgc-metrics.json', 'utf8')); } catch (e) { /* no traffic ever */ }\nconst day = new Date().toISOString().slice(0, 10);\nconst d = m.days[day] || { submissions: 0, bots: 0 };\nreturn [{ json: { day, submissions: d.submissions, bots: d.bots, quiet: d.submissions === 0 } }];"
+        "jsCode": "// Zero-submission-day check (PRD NFR-Reliability): a silently broken form\n// looks exactly like a quiet day, so alert on zero and let a human look.\nconst fs = require('fs');\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync('/home/node/.n8n/wgc-metrics.json', 'utf8')); } catch (e) { /* no traffic ever */ }\nconst day = new Date().toISOString().slice(0, 10);\nconst d = m.days[day] || { submissions: 0, bots: 0 };\nreturn [{ json: { day, submissions: d.submissions, bots: d.bots, quiet: d.submissions === 0 } }];",
+        "mode": "runOnceForAllItems"
       },
-      "id": "wf3-daily-check",
+      "id": "4da203c8-68b3-48ad-b9b8-f12d52303eb0",
       "name": "Count today",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
-        0
+        224,
+        240
       ]
     },
     {
@@ -94,13 +94,13 @@
           ]
         }
       },
-      "id": "wf3-daily-if",
+      "id": "8547c693-be87-48f4-a676-313da0ea5286",
       "name": "Zero today?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        440,
-        0
+        448,
+        240
       ]
     },
     {
@@ -127,13 +127,13 @@
           "timeout": 15000
         }
       },
-      "id": "wf3-daily-mail",
+      "id": "0bfe5661-b5ba-4d6b-9a6e-6863ebb607b5",
       "name": "Quiet-day alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
-        -60
+        672,
+        192
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -150,27 +150,27 @@
           ]
         }
       },
-      "id": "wf3-weekly",
+      "id": "b8127c67-9059-444d-b0d9-291dd1d3d342",
       "name": "Weekly Mon 08:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
         0,
-        240
+        480
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Weekly conversion-log export (instrument I1): submissions, delivered-path\n// split, bot rejects for the last 7 days. Counts only - never PII.\nconst fs = require('fs');\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync('/home/node/.n8n/wgc-metrics.json', 'utf8')); } catch (e) { /* no data */ }\nconst lines = [];\nconst totals = { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nfor (let i = 7; i >= 1; i--) {\n  const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);\n  const d = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\n  lines.push(day + '  submissions=' + d.submissions + '  api=' + d.delivered_api + '  email=' + d.delivered_email + '  bots=' + d.bots);\n  for (const k of Object.keys(totals)) totals[k] += d[k] || 0;\n}\nlines.push('');\nlines.push('WEEK TOTAL  submissions=' + totals.submissions + '  api=' + totals.delivered_api + '  email=' + totals.delivered_email + '  bots=' + totals.bots);\nreturn [{ json: { report: lines.join('\\n') } }];"
+        "jsCode": "// Weekly conversion-log export (instrument I1): submissions, delivered-path\n// split, bot rejects for the last 7 days. Counts only - never PII.\nconst fs = require('fs');\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync('/home/node/.n8n/wgc-metrics.json', 'utf8')); } catch (e) { /* no data */ }\nconst lines = [];\nconst totals = { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nfor (let i = 7; i >= 1; i--) {\n  const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);\n  const d = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\n  lines.push(day + '  submissions=' + d.submissions + '  api=' + d.delivered_api + '  email=' + d.delivered_email + '  bots=' + d.bots);\n  for (const k of Object.keys(totals)) totals[k] += d[k] || 0;\n}\nlines.push('');\nlines.push('WEEK TOTAL  submissions=' + totals.submissions + '  api=' + totals.delivered_api + '  email=' + totals.delivered_email + '  bots=' + totals.bots);\nreturn [{ json: { report: lines.join('\\n') } }];",
+        "mode": "runOnceForAllItems"
       },
-      "id": "wf3-weekly-report",
+      "id": "47892d97-f0d6-48e5-a47d-c372a0fe0228",
       "name": "Build I1 export",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
-        240
+        224,
+        480
       ]
     },
     {
@@ -197,13 +197,13 @@
           "timeout": 15000
         }
       },
-      "id": "wf3-weekly-mail",
+      "id": "01ba67c7-830e-441d-9dd7-923bc1eb83e6",
       "name": "Send I1 export",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        440,
-        240
+        448,
+        480
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -252,8 +252,7 @@
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Weekly Mon 08:00": {
@@ -280,7 +279,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "pinData": {}
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
 }
