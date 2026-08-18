@@ -180,11 +180,16 @@ await check('A3  the node REPORTS a bad credential instead of swallowing it', as
   assert.equal(j.crm_deal_id, '');
 });
 
-await check('A4  the node REPORTS absent config without making a call', async () => {
+await check('A4  the node REPORTS a missing credential without making a call', async () => {
   const j = await runNode({ payload: lead({ email: safeEmail('noconf') }), env: {} });
   assert.equal(j.delivered_api, false);
+  // The credential is now the ONLY thing that can be missing: pipeline, stage
+  // and source ship as verified defaults so that fixing lead delivery needs no
+  // new Railway variable, and therefore no worker redeploy, and therefore does
+  // not wipe the estimator index.
   assert.match(j.crm_error, /LEADSIMPLE_REST_KEY/);
-  assert.match(j.crm_error, /LEADSIMPLE_PIPELINE_ID/);
+  assert.match(j.crm_error, /LEADSIMPLE_API_KEY/, 'names the variable Railway already has');
+  assert.doesNotMatch(j.crm_error, /LEADSIMPLE_PIPELINE_ID/, 'the pipeline has a default, so it is never missing');
 });
 
 await check('A5  a nonexistent pipeline is rejected and reported (nothing can persist)', async () => {
@@ -284,17 +289,26 @@ if (process.env.WGC_E2E_ALLOW_WRITES !== '1') {
   const email = realEmail('happy');
   console.log('  ..    contact email for this run: ' + email);
 
-  await check('B1  happy path: the node creates a real deal and returns id + link', async () => {
+  // Deliberately the MINIMUM env: one credential, under the LEGACY name Railway
+  // already holds. No LEADSIMPLE_REST_KEY, no pipeline, no stage, no source.
+  // This is exactly the production state after an import+publish with nothing
+  // configured, so passing here means the workflow works with zero new Railway
+  // variables, and therefore with no worker redeploy and no wiped estimator index.
+  const ZERO_CONFIG_ENV = { LEADSIMPLE_API_KEY: KEY };
+
+  await check('B1  ZERO new config: one legacy key creates a real deal, id + link back', async () => {
     const j = await runNode({
       payload: lead({ email }),
       estimate: { low: 1800, high: 2000, comps: [], meta: { source: 'own-lease-history' } },
-      env: FULL_ENV,
+      env: ZERO_CONFIG_ENV,
     });
     assert.equal(j.delivered_api, true, 'crm_error was: ' + j.crm_error);
     assert.ok(j.crm_deal_id, 'must return data.id');
+    assert.match(j.crm_key_source, /LEADSIMPLE_API_KEY/, 'and it says which variable answered');
     createdIds.push(j.crm_deal_id);
+    note('key source: ' + j.crm_key_source + '   pipeline used: ' + j.crm_pipeline_id);
     note('created deal ' + j.crm_deal_id);
-    note('link ' + (j.crm_deal_link || '(none returned)'));
+    note('PROOF LINK ' + (j.crm_deal_link || '(none returned)'));
   });
 
   // The READ shape is NOT the WRITE shape. Verified live 2026-08-18: we send

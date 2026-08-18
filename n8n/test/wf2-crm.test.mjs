@@ -84,26 +84,76 @@ const pick = (body, key) => pairs(body).filter(([k]) => k === key).map(([, v]) =
 
 // --- the exact bug, proven by deliberate violation -------------------------
 
-test('absent config is REPORTED, not swallowed (the four-week silent failure)', async () => {
+test('a missing credential is REPORTED, not swallowed (the four-week silent failure)', async () => {
   let called = 0;
   const j = await runCrm({ payload: LEAD, env: {}, httpRequest: async () => { called++; } });
   assert.equal(called, 0, 'must not attempt a call it cannot authenticate');
   assert.equal(j.delivered_api, false);
-  assert.match(j.crm_error, /LEADSIMPLE_REST_KEY/, 'names the missing key');
-  assert.match(j.crm_error, /LEADSIMPLE_PIPELINE_ID/, 'names the missing pipeline');
-  assert.match(j.crm_error, /both the n8n main and worker/i, 'says where to set them');
+  assert.match(j.crm_error, /LEADSIMPLE_REST_KEY/, 'names the variable');
+  assert.match(j.crm_error, /LEADSIMPLE_API_KEY/, 'and the name Railway already uses');
+  assert.match(j.crm_error, /both the n8n main and worker/i, 'says where to set it');
   assert.notEqual(j.crm_error, '', 'a non-empty reason is what drives the alert');
 });
 
-test('partial config still reports, naming only what is missing', async () => {
+// --- zero new Railway config ---------------------------------------------
+// Setting a variable on the n8n worker redeploys it, and the worker's
+// /home/node/.n8n is ephemeral, so a redeploy WIPES the estimator segment index.
+// Requiring four new vars to fix lead delivery would have broken rent estimates
+// as a side effect. Only the credential is truly config; the rest are verified
+// constants for this client and ship as overridable defaults.
+
+test('the credential falls back to LEADSIMPLE_API_KEY, and SAYS that it did', async () => {
+  let seen = null;
   const j = await runCrm({
     payload: LEAD,
-    env: { LEADSIMPLE_REST_KEY: 'k' },
-    httpRequest: async () => { throw new Error('should not be called'); },
+    env: { LEADSIMPLE_API_KEY: 'railways-existing-key' },
+    httpRequest: async (o) => { seen = o; return { statusCode: 201, body: { data: { id: 'd1', link: 'L' } } }; },
   });
-  assert.equal(j.delivered_api, false);
-  assert.match(j.crm_error, /LEADSIMPLE_PIPELINE_ID/);
-  assert.doesNotMatch(j.crm_error, /LEADSIMPLE_REST_KEY/, 'does not blame what is present');
+  assert.equal(seen.headers.Authorization, 'railways-existing-key', 'uses it');
+  assert.equal(j.delivered_api, true, 'and delivery works with no new variable at all');
+  assert.match(j.crm_key_source, /LEADSIMPLE_API_KEY/, 'a documented fallback, never a silent one');
+  assert.match(j.crm_key_source, /fallback/);
+});
+
+test('LEADSIMPLE_REST_KEY wins when both are present', async () => {
+  let seen = null;
+  const j = await runCrm({
+    payload: LEAD,
+    env: { LEADSIMPLE_REST_KEY: 'preferred', LEADSIMPLE_API_KEY: 'legacy' },
+    httpRequest: async (o) => { seen = o; return { statusCode: 201, body: { data: { id: 'd1' } } }; },
+  });
+  assert.equal(seen.headers.Authorization, 'preferred');
+  assert.equal(j.crm_key_source, 'LEADSIMPLE_REST_KEY');
+});
+
+test('pipeline, stage and source fall back to the verified live defaults', async () => {
+  let body = '';
+  const j = await runCrm({
+    payload: LEAD,
+    env: { LEADSIMPLE_API_KEY: 'k' },
+    httpRequest: async (o) => { body = o.body; return { statusCode: 201, body: { data: { id: 'd1' } } }; },
+  });
+  assert.deepEqual(pick(body, 'deal[pipeline_id]'), ['8c50bfc2-6377-4174-b6b2-aa5d252fcdaa'], 'Owner Leads');
+  assert.deepEqual(pick(body, 'deal[stage_id]'), ['eaa0001a-7e05-44f9-9eb6-8a711b91100c'], 'New Lead');
+  assert.deepEqual(pick(body, 'deal[source_id_or_name]'), ['Rent Estimator - wgcassetguide.com']);
+  assert.equal(j.crm_pipeline_id, '8c50bfc2-6377-4174-b6b2-aa5d252fcdaa', 'reported for the execution log');
+});
+
+test('env still overrides every default, so another account can be pointed at', async () => {
+  let body = '';
+  await runCrm({
+    payload: LEAD,
+    env: {
+      LEADSIMPLE_REST_KEY: 'k',
+      LEADSIMPLE_PIPELINE_ID: 'other-pipeline',
+      LEADSIMPLE_STAGE_ID: 'other-stage',
+      LEADSIMPLE_SOURCE_NAME: 'Other Source',
+    },
+    httpRequest: async (o) => { body = o.body; return { statusCode: 201, body: { data: { id: 'd1' } } }; },
+  });
+  assert.deepEqual(pick(body, 'deal[pipeline_id]'), ['other-pipeline']);
+  assert.deepEqual(pick(body, 'deal[stage_id]'), ['other-stage']);
+  assert.deepEqual(pick(body, 'deal[source_id_or_name]'), ['Other Source']);
 });
 
 // --- the delivery contract, verified live 2026-08-18 -----------------------
