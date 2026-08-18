@@ -213,7 +213,105 @@ test('a string response body is parsed, not assumed to be an object', async () =
   assert.equal(j.crm_deal_id, 'deal-s');
 });
 
-test('401 exhausts retries on the documented backoff, without claiming delivery', async () => {
+// --- retry policy: only transient failures are worth a second attempt -----
+// The live e2e showed the old loop retrying a 400 three times. That delays the
+// alert by 10s and spends account-wide quota (shared with the client's other
+// integrations) to learn nothing, because the request is malformed either way.
+
+const throws = (status, body, headers = {}) => async () => {
+  const e = new Error(typeof body === 'string' ? body : 'HTTP ' + status);
+  e.response = { status, headers, body };
+  e.statusCode = status;
+  throw e;
+};
+
+for (const [status, label] of [[400, 'validation'], [401, 'bad credential'], [403, 'forbidden'], [404, 'no such pipeline']]) {
+  test(`a ${status} (${label}) is tried ONCE and marked permanent`, async () => {
+    let calls = 0;
+    const delays = [];
+    const j = await runCrm({
+      payload: LEAD,
+      env: FULL_ENV,
+      delays,
+      httpRequest: async (o) => { calls++; return throws(status, { error: label })(o); },
+    });
+    assert.equal(calls, 1, 'no point asking again');
+    assert.deepEqual(delays, [], 'and no sleeping');
+    assert.equal(j.delivered_api, false);
+    assert.match(j.crm_error, new RegExp('HTTP ' + status));
+    assert.match(j.crm_error, /\[permanent, not retried\]/);
+    assert.equal(j.crm_deal_id, '');
+  });
+}
+
+for (const [status, label] of [[429, 'rate limited'], [500, 'server error'], [503, 'unavailable'], [408, 'request timeout']]) {
+  test(`a ${status} (${label}) IS retried on the backoff ladder`, async () => {
+    let calls = 0;
+    const delays = [];
+    const j = await runCrm({
+      payload: LEAD,
+      env: FULL_ENV,
+      delays,
+      httpRequest: async (o) => { calls++; return throws(status, { error: label })(o); },
+    });
+    assert.equal(calls, 3, 'three attempts');
+    assert.deepEqual(delays, [2000, 8000], 'backs off 2s then 8s, no sleep after the last try');
+    assert.equal(j.delivered_api, false);
+    assert.doesNotMatch(j.crm_error, /permanent/);
+  });
+}
+
+test('a transport error with no HTTP status is treated as transient', async () => {
+  let calls = 0;
+  const delays = [];
+  await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays,
+    httpRequest: async () => { throw new Error('ECONNRESET'); },
+  });
+  assert.equal(calls === 0, true, 'sanity: counter unused here');
+  assert.deepEqual(delays, [2000, 8000], 'a dropped connection deserves a retry');
+});
+
+// --- error legibility: the alert is worthless if it says [object Object] ---
+// Both shapes below were produced by the REAL API on 2026-08-18. The array of
+// objects is what rendered as "[object Object],[object Object]".
+
+test('a string-shaped 400 body reaches the alert verbatim', async () => {
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    httpRequest: throws(400, { error: 'deal[pipeline_id] is missing' }),
+  });
+  assert.match(j.crm_error, /deal\[pipeline_id\] is missing/);
+});
+
+test('an ARRAY-of-objects 400 body is flattened, never "[object Object]"', async () => {
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    httpRequest: throws(400, { error: [{ pipeline_id: 'is invalid' }, { stage_id: 'does not belong to pipeline' }] }),
+  });
+  assert.doesNotMatch(j.crm_error, /\[object Object\]/, 'this is the exact bug the live e2e found');
+  assert.match(j.crm_error, /pipeline_id: is invalid/);
+  assert.match(j.crm_error, /stage_id: does not belong to pipeline/);
+});
+
+test('a bare array body, a nested errors key, and an empty body all stay readable', async () => {
+  const shapes = [
+    [[{ base: 'something broke' }], /base: something broke/],
+    [{ errors: { deal: ['too many'], contact: ['bad email'] } }, /deal: too many; contact: bad email/],
+    [undefined, /unknown error|HTTP 400/],
+  ];
+  for (const [body, expected] of shapes) {
+    const j = await runCrm({ payload: LEAD, env: FULL_ENV, httpRequest: throws(400, body) });
+    assert.doesNotMatch(j.crm_error, /\[object Object\]/, 'shape: ' + JSON.stringify(body));
+    assert.match(j.crm_error, expected, 'shape: ' + JSON.stringify(body));
+  }
+});
+
+test('a rate-limit body is legible AND the retry honours its header', async () => {
   let calls = 0;
   const delays = [];
   const j = await runCrm({
@@ -222,16 +320,25 @@ test('401 exhausts retries on the documented backoff, without claiming delivery'
     delays,
     httpRequest: async () => {
       calls++;
-      const e = new Error('Invalid Access Token');
-      e.response = { status: 401, headers: {} };
+      const e = new Error('HTTP 429');
+      e.response = {
+        status: 429,
+        headers: { 'x-ratelimit-retry-after': '60', 'x-ratelimit-metric-error': 'records' },
+        body: { error: 'Rate limit exceeded for records, please wait 1 minute before retrying' },
+      };
       throw e;
     },
   });
-  assert.equal(calls, 3, 'three attempts');
-  assert.deepEqual(delays, [2000, 8000], 'backs off 2s then 8s, and does not sleep after the last try');
-  assert.equal(j.delivered_api, false);
-  assert.match(j.crm_error, /HTTP 401/);
-  assert.equal(j.crm_deal_id, '');
+  assert.match(j.crm_error, /Rate limit exceeded for records/, 'the real 429 body, observed live');
+  assert.deepEqual(delays, [60000, 60000], 'the server said 60s, so we wait 60s, not our 2s/8s');
+  assert.equal(calls, 3);
+});
+
+test('crm_error never runs away: it is capped and single-line', async () => {
+  const huge = { error: Array.from({ length: 500 }, (_, i) => ({ ['field' + i]: 'x'.repeat(50) })) };
+  const j = await runCrm({ payload: LEAD, env: FULL_ENV, httpRequest: throws(400, huge) });
+  assert.ok(j.crm_error.length < 700, 'an alert email must stay readable, got ' + j.crm_error.length);
+  assert.equal(j.crm_error.includes('\n'), false, 'no newlines to break the alert body');
 });
 
 test('a transient failure then success = delivered', async () => {
