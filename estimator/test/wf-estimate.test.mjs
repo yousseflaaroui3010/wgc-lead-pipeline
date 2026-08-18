@@ -69,8 +69,14 @@ test('WF-1 wiring: Compute estimate fans out to Respond + Dispatch, response rea
   const outs = c['Compute estimate'].main[0].map((x) => x.node);
   assert.ok(outs.includes('Respond success (accepted)'), 'must feed the response directly');
   assert.ok(outs.includes('Dispatch WF-2 (async)'), 'must still dispatch WF-2');
-  // Dispatch must NOT also feed Respond (would double-respond).
-  assert.equal((c['Dispatch WF-2 (async)'].main[0] || []).length, 0);
+  // Dispatch must NOT also feed Respond (would double-respond). n8n writes
+  // "no outgoing connections" two different ways: an explicit {main:[[]]}, or
+  // by omitting the node from `connections` entirely. A live export uses the
+  // second form, and this assertion used to crash on it, so it failed the
+  // moment the repo was synced to match production. Count the edges instead of
+  // assuming a shape.
+  const dispatchEdges = ((c['Dispatch WF-2 (async)'] || {}).main || []).flat();
+  assert.equal(dispatchEdges.length, 0, 'Dispatch must be terminal, or the request is answered twice');
   const body = wf.nodes.find((n) => n.name === 'Respond success (accepted)').parameters.responseBody;
   assert.ok(body.includes('$json.estimate'), 'response reads estimate from its own input');
   assert.ok(!body.includes("$('Compute estimate')"), 'no fragile cross-node reference');
