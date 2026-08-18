@@ -73,6 +73,13 @@ test('axe: inline mode form is clean', async () => {
   assert.equal(results.violations.length, 0, summarize(results));
 });
 
+test('axe: feature layout (section chrome + credibility panel) is clean', async () => {
+  const { mount } = await import('../src/form.js?axe-feature');
+  mount(makeScript({ 'data-layout': 'feature' }));
+  const results = await axe.run(dom.window.document, AXE_OPTIONS);
+  assert.equal(results.violations.length, 0, summarize(results));
+});
+
 test('axe: popup mode, launcher-only (dialog closed) is clean', async () => {
   const { mount } = await import('../src/form.js?axe-popup-closed');
   mount(makeScript({ 'data-mode': 'popup' }));

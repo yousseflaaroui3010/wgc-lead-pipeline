@@ -8,6 +8,23 @@
 // constants — the lightweight, swappable equivalent of message keys.
 
 export const STRINGS = {
+  formTitle: 'Free Rent Estimate',
+  formSub:
+    'Enter your property details for an instant estimated rent range. No email required.',
+  bedroomsLabel: 'Bedrooms',
+  optionalSuffix: '(optional)',
+  submitLabel: 'Get My Estimate',
+  // Loading: the handoff puts the label on the button, not in a spinner.
+  calculating: 'Calculating…',
+  submitting: 'Getting your estimate…',
+  fixFields: 'Please fix the highlighted fields.',
+  estimateKicker: 'Estimated monthly rent',
+  // UNVERIFIED COPY. A displayed rent range is a claim with regulatory weight
+  // in real estate, so the exact wording needs Jon's sign-off (open question
+  // 5 in the design handoff). Shipping no disclaimer at all is the worse
+  // option, so this neutral line stands in until he answers.
+  estimateDisclaimer:
+    'This is an estimate based on comparable properties in your area. It is not an offer or a formal appraisal.',
   // Doubles as the EXPLICIT consent wording (see api.js CONSENT_TEXT_VERSION):
   // ticking this box both requests the guide and agrees to contact.
   ebookLabel:
@@ -124,7 +141,12 @@ export function buildEstimateHtml(estimate, opts) {
   return (
     '<div class="wgc-panel wgc-result" role="status" aria-live="assertive">' +
     '<h2 class="wgc-title" id="wgc-dyn-title">' + escapeHtml(STRINGS.estimateTitle) + '</h2>' +
+    // Red-edged block (handoff §1): kicker above, range below.
+    '<div class="wgc-range-block">' +
+    '<p class="wgc-range-kicker">' + escapeHtml(STRINGS.estimateKicker) + '</p>' +
     '<p class="wgc-range">' + range + '<span class="wgc-range-unit">/mo</span></p>' +
+    '</div>' +
+    '<p class="wgc-disclaimer">' + escapeHtml(STRINGS.estimateDisclaimer) + '</p>' +
     basisHtml(estimate, opts) +
     ebookLine(opts) +
     ctaHtml +
