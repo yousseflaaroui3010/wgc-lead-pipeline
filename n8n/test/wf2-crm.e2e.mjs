@@ -104,8 +104,25 @@ const lead = (over = {}) => Object.assign({
   name: '', email: '', phone: '', zip: '76052', sqft: 1800, bedrooms: 3, ebook_opt_in: true,
 }, over);
 
-// A reserved TLD (RFC 2606). Cannot receive mail, so nothing can be sent to it.
+// PHASE A only. A reserved TLD (RFC 2606) that cannot receive mail. Phase A
+// never persists a deal, so nothing can be triggered against it either way.
 const safeEmail = (tag) => `wgc-e2e-${tag}-${Date.now().toString(36)}@example.invalid`;
+
+// PHASE B. A mailbox WE control, deliberately, not an unreachable address.
+// Creating a deal in Owner Leads fires automated outbound mail: 3 of the 8 most
+// recent deals were emailed within 4s, 1s and 2s of creation (checked
+// 2026-08-18). Pointing that at a real inbox turns an unavoidable side effect
+// into the only record anybody has of what Jon's account sends a new lead.
+// Plus-addressed so repeat runs do not collide with LeadSimple's own dedupe.
+function realEmail(tag) {
+  const base = process.env.WGC_E2E_EMAIL || 'yousseff+wgce2e@westromgroup.com';
+  const at = base.indexOf('@');
+  if (at < 1) throw new Error('WGC_E2E_EMAIL is not an email address');
+  const local = base.slice(0, at);
+  const domain = base.slice(at);
+  const uniq = `${tag}-${Date.now().toString(36)}`;
+  return local.includes('+') ? `${local}-${uniq}${domain}` : `${local}+wgce2e-${uniq}${domain}`;
+}
 
 let pass = 0; let fail = 0; const notes = [];
 async function check(name, fn) {
@@ -264,7 +281,8 @@ if (process.env.WGC_E2E_ALLOW_WRITES !== '1') {
   console.log('        so anything created here must be removed by hand in LeadSimple.');
 } else {
   const createdIds = [];
-  const email = safeEmail('happy');
+  const email = realEmail('happy');
+  console.log('  ..    contact email for this run: ' + email);
 
   await check('B1  happy path: the node creates a real deal and returns id + link', async () => {
     const j = await runNode({
@@ -279,49 +297,108 @@ if (process.env.WGC_E2E_ALLOW_WRITES !== '1') {
     note('link ' + (j.crm_deal_link || '(none returned)'));
   });
 
-  await check('B2  the deal really exists, with our fields on it', async () => {
+  // The READ shape is NOT the WRITE shape. Verified live 2026-08-18: we send
+  // property[address_zip_code] / [square_feet] / [num_bedrooms] /
+  // [estimated_rent], and the deal comes back with zip_code on the property and
+  // the rest nested under property.unit. The first version of this check read
+  // the write-side names, got {} for everything, and reported a data-loss bug
+  // that did not exist. Asserting the wrong keys is worse than not asserting.
+  await check('B2  every field we sent is really on the deal (read-side names)', async () => {
     assert.ok(createdIds[0], 'B1 must have created one');
     const r = await n8nHttpRequest({ method: 'GET', url: `${BASE}/deals/${createdIds[0]}`, headers: { Authorization: KEY } });
     const d = Array.isArray(r.data) ? r.data[0] : r.data;
-    note('name=' + JSON.stringify(d.name) + '  source=' + JSON.stringify(d.source && d.source.name)
-      + '  stage=' + JSON.stringify(d.stage && d.stage.name));
-    note('contacts=' + JSON.stringify((d.contacts || []).map((c) => ({ name: c.name, emails: c.emails }))));
-    note('properties=' + JSON.stringify((d.properties || []).map((p) => ({
-      zip: p.address_zip_code, sqft: p.square_feet, beds: p.num_bedrooms, rent: p.estimated_rent,
-    }))));
-    note('assignee=' + JSON.stringify(d.assignee && d.assignee.name) + '  tasks_due=' + JSON.stringify(d.next_task_due_at)
-      + '  task_kind=' + JSON.stringify(d.next_task_kind));
-    assert.equal(d.name, email.split('@')[0], 'title is the email local-part');
+    const c = (d.contacts || [])[0] || {};
+    const p = (d.properties || [])[0] || {};
+    const u = p.unit || {};
+    note(`deal.name=${JSON.stringify(d.name)} source=${JSON.stringify(d.source && d.source.name)} stage=${JSON.stringify(d.stage && d.stage.name)}`);
+    note(`contact.name=${JSON.stringify(c.name)} emails=${JSON.stringify(c.emails)}`);
+    note(`property.zip_code=${JSON.stringify(p.zip_code)} unit.square_feet=${JSON.stringify(u.square_feet)} `
+      + `unit.num_bedrooms=${JSON.stringify(u.num_bedrooms)} unit.estimated_rent=${JSON.stringify(u.estimated_rent)}`);
+    note(`assignee=${JSON.stringify(d.assignee && d.assignee.name)} next_task=${JSON.stringify(d.next_task_kind)}`);
+
+    assert.equal(d.name, email.split('@')[0], 'deal title is the email local-part');
+    assert.equal(d.source && d.source.name, SOURCE_NAME, 'our dedicated source');
+    assert.equal(d.stage && d.stage.name, 'New Lead');
+    assert.deepEqual(c.emails, [email], 'the contact carries the email');
+    // LeadSimple normalises full_name: it title-cases and splits on separators,
+    // so "jsmith-happy" comes back "Jsmith Happy". Asserting equality here was
+    // MY error, not theirs. What matters is that it is derived from what we
+    // sent and is no longer the invented "Unknown Name".
+    assert.notEqual(c.name, 'Unknown Name', 'contact[full_name] must stop LeadSimple inventing a name');
+    const localPart = email.split('@')[0];
+    const squash = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+    assert.equal(squash(c.name), squash(localPart), `contact name derives from the local-part; got ${JSON.stringify(c.name)}`);
+    assert.equal(p.zip_code, '76052', 'zip landed');
+    assert.equal(Number(u.square_feet), 1800, 'square footage landed');
+    assert.equal(Number(u.num_bedrooms), 3, 'bedrooms landed');
+    assert.equal(Number(u.estimated_rent), 1900, 'OUR rent midpoint landed on the client property record');
+    assert.match(String(d.comments), /Submission: /, 'submission id is traceable in comments');
   });
 
-  await check('B3  read-back by email finds it (the verification WF-3 could use)', async () => {
+  // THE test the duplicate guard stands on. The guard runs ~2 seconds after a
+  // failed write, so whatever it reads must be consistent IMMEDIATELY. This
+  // measures that, and measures search alongside it for the record.
+  await check('B3  the LISTING sees a brand-new deal immediately (search does not)', async () => {
+    const localPart = email.split('@')[0];
+    const listing = await n8nHttpRequest({
+      method: 'GET',
+      url: `${BASE}/pipelines/${PIPELINE_ID}/deals?per_page=25&order_field=created_at&order_direction=desc`,
+      headers: { Authorization: KEY },
+    });
+    const inListing = listing.data.some((x) => x.id === createdIds[0]);
+    const byName = await n8nHttpRequest({
+      method: 'GET', url: `${BASE}/deals?pipeline_id=${PIPELINE_ID}&search=${encodeURIComponent(localPart)}`,
+      headers: { Authorization: KEY },
+    });
+    const byEmail = await n8nHttpRequest({
+      method: 'GET', url: `${BASE}/deals?pipeline_id=${PIPELINE_ID}&search=${encodeURIComponent(email)}`,
+      headers: { Authorization: KEY },
+    });
+    note(`immediately after create: listing=${inListing ? 'FOUND' : 'missing'}  `
+      + `search(name)=${byName.data.length} hit(s)  search(full email)=${byEmail.data.length} hit(s)`);
+    if (!byName.data.length) note('search lag confirmed again: the index had not caught up yet');
+    assert.ok(inListing, 'the guard reads this listing; if it lags, the guard is useless');
+  });
+
+  // NOT re-tested here on purpose. Creating another duplicate would leave a
+  // second undeletable deal in the client's pipeline to prove something already
+  // proven: on 2026-08-18 two POSTs with the same email produced deals
+  // db4f8e27 and 60e5a983 one second apart, sharing ONE contact (4369952e) but
+  // with two separate property and unit records. So deal[accept_duplicates]
+  // =false dedupes the contact, NOT the deal. Our own retry guard is covered by
+  // unit tests in wf2-crm.test.mjs, which cost nobody a cleanup task.
+  note('duplicate behaviour: verified 2026-08-18, not re-created here (see wf2-crm.test.mjs)');
+
+  await check('B5  the dedicated Source was auto-created by create_source_if_new', async () => {
     const r = await n8nHttpRequest({
-      method: 'GET', url: `${BASE}/deals?pipeline_id=${PIPELINE_ID}&search=${encodeURIComponent(email)}`,
+      method: 'GET', url: `${BASE}/pipelines/${PIPELINE_ID}/sources?per_page=50`,
       headers: { Authorization: KEY },
     });
-    assert.ok(r.data.length >= 1, 'search by email must find the deal we just made');
+    const ours = r.data.find((s) => s.name === SOURCE_NAME);
+    assert.ok(ours, `"${SOURCE_NAME}" must now exist in Owner Leads; got: ${r.data.map((s) => s.name).join(' | ')}`);
+    note('source created: ' + ours.name + '  id=' + ours.id);
   });
 
-  await check('B4  a duplicate submission does NOT silently multiply deals', async () => {
-    const before = await n8nHttpRequest({
-      method: 'GET', url: `${BASE}/deals?pipeline_id=${PIPELINE_ID}&search=${encodeURIComponent(email)}`,
-      headers: { Authorization: KEY },
-    });
-    const j = await runNode({ payload: lead({ email }), env: FULL_ENV });
-    if (j.delivered_api && j.crm_deal_id && !createdIds.includes(j.crm_deal_id)) createdIds.push(j.crm_deal_id);
-    const after = await n8nHttpRequest({
-      method: 'GET', url: `${BASE}/deals?pipeline_id=${PIPELINE_ID}&search=${encodeURIComponent(email)}`,
-      headers: { Authorization: KEY },
-    });
-    note(`same email twice: deals before=${before.data.length} after=${after.data.length}, `
-      + `second call delivered=${j.delivered_api} id=${j.crm_deal_id || '(none)'} err=${j.crm_error || '(none)'}`);
-    assert.ok(after.data.length <= before.data.length + 1, 'accept_duplicates=false must not fan out');
+  // The reason for using a real mailbox. Answers, with evidence, what Jon's
+  // account does to a lead the instant it arrives. Nobody had verified this.
+  await check('B6  observe whether automated outbound mail fires on our deal', async () => {
+    assert.ok(createdIds[0], 'B1 must have created one');
+    await new Promise((r) => setTimeout(r, 20000)); // real deals were emailed within 1-4s
+    const r = await n8nHttpRequest({ method: 'GET', url: `${BASE}/deals/${createdIds[0]}`, headers: { Authorization: KEY } });
+    const d = Array.isArray(r.data) ? r.data[0] : r.data;
+    const lag = d.last_emailed_at ? Math.round((new Date(d.last_emailed_at) - new Date(d.created_at)) / 1000) : null;
+    note(`automation after 20s: outbound_emails=${d.num_outbound_emails} last_emailed_at=${d.last_emailed_at || 'never'}`
+      + (lag === null ? '' : ` (+${lag}s)`) + ` next_task=${d.next_task_kind || 'none'} due=${d.next_task_due_at || 'none'}`);
+    note(lag !== null
+      ? 'CONFIRMED: Jon\'s account emails a new lead automatically. Check ' + email + ' for what it says.'
+      : 'No automated email fired on OUR deal within 20s. The 3-of-8 pattern is conditional, not universal.');
   });
 
   console.log('\n  ############################################################');
   console.log('  MANUAL CLEANUP REQUIRED. There is no API delete (405).');
   for (const id of createdIds) console.log('    delete deal ' + id);
-  console.log('  Owner Leads pipeline, search for "wgc-e2e-".');
+  console.log('  Owner Leads pipeline. Search for: ' + email);
+  console.log('  Also clear any task queued for Jon on those deals.');
   console.log('  ############################################################');
 }
 

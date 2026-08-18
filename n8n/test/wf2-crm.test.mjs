@@ -135,6 +135,9 @@ test('body carries LeadSimple field names, not our internal ones', async () => {
   assert.deepEqual(pick(body, 'deal[create_source_if_new]'), ['true']);
   assert.deepEqual(pick(body, 'deal[accept_duplicates]'), ['false'], 'let LeadSimple dedupe');
   assert.deepEqual(pick(body, 'contact[email_addresses][]'), ['jsmith@gmail.com']);
+  // Without this, LeadSimple invents the contact name "Unknown Name". Observed
+  // live 2026-08-18 on a real created deal.
+  assert.deepEqual(pick(body, 'contact[full_name]'), ['jsmith'], 'contact must not be nameless');
   assert.deepEqual(pick(body, 'property[address_zip_code]'), ['76052']);
   assert.deepEqual(pick(body, 'property[square_feet]'), ['1800']);
   assert.deepEqual(pick(body, 'property[num_bedrooms]'), ['3']);
@@ -246,15 +249,18 @@ for (const [status, label] of [[400, 'validation'], [401, 'bad credential'], [40
 
 for (const [status, label] of [[429, 'rate limited'], [500, 'server error'], [503, 'unavailable'], [408, 'request timeout']]) {
   test(`a ${status} (${label}) IS retried on the backoff ladder`, async () => {
-    let calls = 0;
+    let posts = 0;
     const delays = [];
     const j = await runCrm({
       payload: LEAD,
       env: FULL_ENV,
       delays,
-      httpRequest: async (o) => { calls++; return throws(status, { error: label })(o); },
+      httpRequest: async (o) => {
+        if (o.method === 'POST') posts++;
+        return throws(status, { error: label })(o);
+      },
     });
-    assert.equal(calls, 3, 'three attempts');
+    assert.equal(posts, 3, 'three POST attempts');
     assert.deepEqual(delays, [2000, 8000], 'backs off 2s then 8s, no sleep after the last try');
     assert.equal(j.delivered_api, false);
     assert.doesNotMatch(j.crm_error, /permanent/);
@@ -262,7 +268,6 @@ for (const [status, label] of [[429, 'rate limited'], [500, 'server error'], [50
 }
 
 test('a transport error with no HTTP status is treated as transient', async () => {
-  let calls = 0;
   const delays = [];
   await runCrm({
     payload: LEAD,
@@ -270,8 +275,147 @@ test('a transport error with no HTTP status is treated as transient', async () =
     delays,
     httpRequest: async () => { throw new Error('ECONNRESET'); },
   });
-  assert.equal(calls === 0, true, 'sanity: counter unused here');
   assert.deepEqual(delays, [2000, 8000], 'a dropped connection deserves a retry');
+});
+
+// --- never create a duplicate lead on an ambiguous retry ------------------
+// Verified live 2026-08-18: deal[accept_duplicates]=false does NOT dedupe. Two
+// POSTs with the same email produced two deals one second apart, and the API
+// has no idempotency key. So a timeout or 5xx after a successful write would
+// have made a blind retry into a duplicate-lead generator.
+
+const searchResponse = (rows) => ({ statusCode: 200, body: { data: rows } });
+
+test('an ambiguous failure checks whether the deal already exists BEFORE retrying', async () => {
+  const seen = [];
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    httpRequest: async (o) => {
+      seen.push(o.method);
+      if (o.method === 'GET') {
+        // The write DID land; the response was just lost on the way back.
+        return searchResponse([{
+          id: 'deal-recovered',
+          name: 'jsmith',
+          created_at: new Date().toISOString(),
+          link: 'https://app.leadsimple.com/deal-recovered',
+          contacts: [{ emails: ['jsmith@gmail.com'] }],
+        }]);
+      }
+      return throws(504, { error: 'gateway timeout' })(o);
+    },
+  });
+  assert.deepEqual(seen, ['POST', 'GET'], 'one POST, then look before leaping');
+  assert.equal(seen.filter((m) => m === 'POST').length, 1, 'NO second POST: that would duplicate the lead');
+  assert.equal(j.delivered_api, true, 'the deal exists, so this counts as delivered');
+  assert.equal(j.crm_deal_id, 'deal-recovered');
+  assert.equal(j.crm_deal_link, 'https://app.leadsimple.com/deal-recovered');
+  assert.equal(j.crm_error, '');
+});
+
+test('if the read-back finds nothing, the retry proceeds normally', async () => {
+  const seen = [];
+  const delays = [];
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays,
+    httpRequest: async (o) => {
+      seen.push(o.method);
+      if (o.method === 'GET') return searchResponse([]);
+      return throws(503, { error: 'unavailable' })(o);
+    },
+  });
+  assert.deepEqual(seen, ['POST', 'GET', 'POST', 'GET', 'POST', 'GET']);
+  assert.deepEqual(delays, [2000, 8000]);
+  assert.equal(j.delivered_api, false, 'nothing was ever created');
+});
+
+test('the read-back ignores a same-name deal belonging to a different email', async () => {
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    httpRequest: async (o) => {
+      if (o.method === 'GET') {
+        return searchResponse([{
+          id: 'someone-else', name: 'jsmith', created_at: new Date().toISOString(),
+          contacts: [{ emails: ['a.different.jsmith@example.com'] }],
+        }]);
+      }
+      return throws(504, { error: 'gateway timeout' })(o);
+    },
+  });
+  assert.equal(j.delivered_api, false, 'another person named jsmith is not our lead');
+  assert.notEqual(j.crm_deal_id, 'someone-else');
+});
+
+test('the read-back ignores a stale deal from an earlier submission', async () => {
+  const old = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    httpRequest: async (o) => {
+      if (o.method === 'GET') {
+        return searchResponse([{ id: 'last-month', name: 'jsmith', created_at: old, contacts: [{ emails: ['jsmith@gmail.com'] }] }]);
+      }
+      return throws(504, { error: 'gateway timeout' })(o);
+    },
+  });
+  assert.equal(j.delivered_api, false, 'a 45-minute-old deal is a previous lead, not this one');
+});
+
+test('a 429 skips the read-back, because a rate-limited request never wrote', async () => {
+  const seen = [];
+  await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays: [],
+    httpRequest: async (o) => { seen.push(o.method); return throws(429, { error: 'Rate limit exceeded for records' })(o); },
+  });
+  assert.equal(seen.includes('GET'), false, 'no wasted read-back, and no wasted account-wide quota');
+  assert.equal(seen.filter((m) => m === 'POST').length, 3);
+});
+
+test('a failing read-back does not mask the original error', async () => {
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays: [],
+    httpRequest: async (o) => {
+      if (o.method === 'GET') throw new Error('search is down too');
+      return throws(502, { error: 'bad gateway' })(o);
+    },
+  });
+  assert.equal(j.delivered_api, false);
+  assert.match(j.crm_error, /HTTP 502/, 'the POST failure is what a human needs to see');
+  assert.doesNotMatch(j.crm_error, /search is down/);
+});
+
+test('the read-back reads the LISTING, never the lagging search index', async () => {
+  let url = '';
+  await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays: [],
+    httpRequest: async (o) => {
+      if (o.method === 'GET') { url = o.url; return searchResponse([]); }
+      return throws(504, {})(o);
+    },
+  });
+  // Verified live 2026-08-18, and this is the whole reason the guard works:
+  //   - GET /deals?search=<full email> returns 0, the query breaks on the "@"
+  //   - GET /deals?search=<deal name> found NOTHING seconds after creation,
+  //     then found it 90s later. It is an index, and it lags.
+  // The guard fires ~2s after a failed write, inside that lag window, so it
+  // must read the direct ordered listing instead. If someone "simplifies" this
+  // back to ?search= the guard still passes its happy path and silently stops
+  // catching duplicates, which is why this asserts the URL shape.
+  assert.match(url, /\/pipelines\/[^/]+\/deals\?/, 'the pipeline deals listing, got: ' + url);
+  assert.match(url, /order_field=created_at/, 'ordered so a fresh deal is at the top');
+  assert.match(url, /order_direction=desc/);
+  assert.doesNotMatch(url, /[?&]search=/, 'must NOT use the lagging search index');
+  assert.doesNotMatch(url, /%40/, 'and never an @, which matches nothing anyway');
 });
 
 // --- error legibility: the alert is worthless if it says [object Object] ---
@@ -341,24 +485,47 @@ test('crm_error never runs away: it is capped and single-line', async () => {
   assert.equal(j.crm_error.includes('\n'), false, 'no newlines to break the alert body');
 });
 
-test('a transient failure then success = delivered', async () => {
-  let calls = 0;
+test('a transient failure then success = delivered (via a clean second POST)', async () => {
+  const seen = [];
   const delays = [];
   const j = await runCrm({
     payload: LEAD,
     env: FULL_ENV,
     delays,
-    httpRequest: async () => {
-      calls++;
-      if (calls === 1) { const e = new Error('ECONNRESET'); e.response = { status: 502, headers: {} }; throw e; }
+    httpRequest: async (o) => {
+      seen.push(o.method);
+      // The read-back finds nothing, so the write genuinely did not land and a
+      // second POST is the correct move.
+      if (o.method === 'GET') return { statusCode: 200, body: { data: [] } };
+      if (seen.filter((m) => m === 'POST').length === 1) {
+        const e = new Error('ECONNRESET'); e.response = { status: 502, headers: {} }; throw e;
+      }
       return { statusCode: 201, body: { data: { id: 'deal-r', link: 'L' } } };
     },
   });
-  assert.equal(calls, 2);
+  assert.deepEqual(seen, ['POST', 'GET', 'POST'], 'ambiguous failure -> look -> then retry');
   assert.deepEqual(delays, [2000]);
   assert.equal(j.delivered_api, true);
   assert.equal(j.crm_error, '', 'a recovered error must not leave a stale reason behind');
   assert.equal(j.crm_deal_id, 'deal-r');
+});
+
+test('a single-deal GET shape (data as an object) cannot crash the read-back', async () => {
+  const seen = [];
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays: [],
+    httpRequest: async (o) => {
+      seen.push(o.method);
+      // data as an OBJECT, not an array: for..of would throw and the catch would
+      // turn a crash into a silent "no duplicate found".
+      if (o.method === 'GET') return { statusCode: 200, body: { data: { id: 'x', name: 'jsmith' } } };
+      return throws(504, { error: 'gateway timeout' })(o);
+    },
+  });
+  assert.equal(j.delivered_api, false, 'an object is not a search hit');
+  assert.equal(seen.filter((m) => m === 'POST').length, 3, 'and the retry ladder still ran');
 });
 
 // Deliberately uses REAL timers (no `delays`), so that the node genuinely
