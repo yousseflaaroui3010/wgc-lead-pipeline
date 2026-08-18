@@ -30,8 +30,38 @@
     "documented_errors": "401 Errors::Authorization, 404 Errors::NotFound. No 400 is documented on POST /deals even though POST /webhook_subscriptions documents one, so how a bad field surfaces is UNVERIFIED.",
     "rate_limits": "Per ACCOUNT, not per key, 1-minute window. Observed 100 requests / 1000 records. Read X-RateLimit-Retry-After rather than assuming a fixed backoff.",
     "spec_version": "info.version 0.0.1 - young API, prove behaviour by running it",
-    "no_idempotency_key": "POST /deals has no external_id or idempotency field. Retry safety rests on deal[accept_duplicates]=false (server-side dedupe on email or phone) plus GET /deals?search=<email> for read-back.",
+    "no_idempotency_key": "POST /deals has no external_id or idempotency field.",
+    "CORRECTION_accept_duplicates": [
+      "An earlier version of this file claimed deal[accept_duplicates]=false gives",
+      "server-side dedupe on email or phone. THAT IS WRONG. Measured live",
+      "2026-08-18: two POSTs with the same email produced two separate deals",
+      "(db4f8e27, 60e5a983) one second apart. They shared ONE contact",
+      "(4369952e) but got TWO property and TWO unit records. So the flag",
+      "dedupes the CONTACT, not the DEAL. Do not rely on it to prevent",
+      "duplicate leads. WF-2 carries its own guard instead."
+    ],
+    "CORRECTION_search_is_not_a_read_back": [
+      "An earlier version claimed GET /deals?search=<email> is the read-back that",
+      "makes delivery provable. It is not, for TWO reasons measured live:",
+      "1. search on a FULL email returns 0 hits, always. The query breaks on the",
+      "   '@'. The local part alone matches; the domain alone matched 14 deals.",
+      "2. search is an INDEX and it LAGS. A deal created seconds earlier was not",
+      "   found by search, then was found 90s later. Immediately after a create:",
+      "   'listing=FOUND search(name)=0 search(full email)=0'.",
+      "The reliable read-backs are GET /deals/{id} using the id from the 201, and",
+      "GET /pipelines/{id}/deals?order_field=created_at&order_direction=desc,",
+      "which is a direct ordered query and is consistent immediately."
+    ],
     "terminology": "LeadSimple calls a lead a Deal. deal[pipeline_id] is the ONLY required field."
+  },
+
+  "_write_shape_is_not_read_shape": {
+    "_note": "Verified live 2026-08-18 on a created deal. Asserting the write-side names against a read response reports data loss that is not happening.",
+    "property[address_zip_code]": "reads back as property.zip_code",
+    "property[square_feet]": "reads back as property.unit.square_feet",
+    "property[num_bedrooms]": "reads back as property.unit.num_bedrooms (as a string, e.g. \"3.0\")",
+    "property[estimated_rent]": "reads back as property.unit.estimated_rent (string, e.g. \"1900.0\")",
+    "contact[full_name]": "title-cased and split on separators: \"jsmith-happy\" becomes \"Jsmith Happy\". OMITTING IT makes LeadSimple invent the contact name \"Unknown Name\"."
   },
 
   "_field_map_real_names": {
@@ -54,8 +84,9 @@
     "pipelines": "GET /pipelines",
     "stages": "GET /pipelines/{pipeline_id}/stages",
     "sources": "GET /pipelines/{pipeline_id}/sources",
-    "read back one deal": "GET /deals/{deal_id}",
-    "find a deal by email": "GET /deals?search=<email>&pipeline_id=<id>",
+    "read back one deal": "GET /deals/{deal_id}  <- ALWAYS consistent, use the id from the 201",
+    "read back a just-written deal": "GET /pipelines/{id}/deals?per_page=25&order_field=created_at&order_direction=desc  <- consistent IMMEDIATELY, this is what the duplicate guard reads",
+    "find a deal by email": "DOES NOT WORK. GET /deals?search=<full email> returns 0 every time; the query breaks on the '@'. Search the local part instead, and only after the index catches up (~tens of seconds).",
     "webhooks": "POST /webhook_subscriptions { event_name, target_url }; event enum includes deal/created"
   }
 }
