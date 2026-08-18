@@ -40,8 +40,18 @@ Known deviations from the S3 VPS design, accepted for this phase:
    | NODE_FUNCTION_ALLOW_BUILTIN | `crypto,fs` |
    | N8N_BLOCK_ENV_ACCESS_IN_NODE | `false` |
    | WGC_HMAC_SECRET | output of `openssl rand -hex 32` |
-   | PARSE_ADDRESS | the LeadSimple new-deal parse address |
-   | LEADSIMPLE_API_KEY | the LeadSimple REST key |
+   | PARSE_ADDRESS | the LeadSimple new-deal parse address (FALLBACK path only) |
+   | LEADSIMPLE_REST_KEY | LeadSimple → Settings → Integrations → REST API → enable, then copy. NOT the Zapier key |
+   | LEADSIMPLE_PIPELINE_ID | `8c50bfc2-6377-4174-b6b2-aa5d252fcdaa` (Owner Leads) |
+   | LEADSIMPLE_STAGE_ID | `eaa0001a-7e05-44f9-9eb6-8a711b91100c` (New Lead) |
+   | LEADSIMPLE_SOURCE_NAME | `Rent Estimator - wgcassetguide.com` |
+
+   ⚠️ **Queue mode: every one of these must exist on BOTH the n8n main AND
+   worker services.** The worker executes production webhooks, so a var set
+   only on main is a var WF-2 cannot see. `LEADSIMPLE_REST_KEY` or
+   `LEADSIMPLE_PIPELINE_ID` missing on the worker now raises a
+   `[WGC ALERT] LeadSimple CRM delivery failed` email rather than failing
+   silently, which is how the previous adapter went unnoticed for four weeks.
    | NOTIFY_EMAILS | jon@…,ashley@…,youssef@… (comma, no spaces) |
    | ALERT_EMAIL | youssef@… |
    | MAIL_FROM | the Brevo-verified sender address |
