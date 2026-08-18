@@ -3,28 +3,35 @@
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "GET",
-        "path": "REPLACE-HOOK-ID/token",
+        "path": "d043c102d78e/token",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "allowedOrigins": "https://wgcassetguide.com,https://westromgroup.com,https://www.westromgroup.com"
+        }
       },
-      "id": "wf0-webhook",
+      "id": "d0c64329-caf4-4f82-8643-1ddb2dec96d7",
       "name": "GET /token",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "wf0-token-webhook"
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// ADR-2: stateless render token = base64(ts.nonce.HMAC_SHA256(secret, ts.nonce)).\n// Requires NODE_FUNCTION_ALLOW_BUILTIN=crypto and WGC_HMAC_SECRET in the environment.\nconst crypto = require('crypto');\nconst secret = $env.WGC_HMAC_SECRET;\nif (!secret) throw new Error('WGC_HMAC_SECRET is not set'); // fail loud, never issue unsigned tokens\nconst ts = String(Date.now());\nconst nonce = crypto.randomBytes(8).toString('hex');\nconst mac = crypto.createHmac('sha256', secret).update(ts + '.' + nonce).digest('hex');\nconst token = Buffer.from(ts + '.' + nonce + '.' + mac, 'utf8').toString('base64');\nreturn [{ json: { token } }];"
+        "jsCode": "// ADR-2: stateless render token = base64(ts.nonce.HMAC_SHA256(secret, ts.nonce)).\n// Requires NODE_FUNCTION_ALLOW_BUILTIN=crypto and WGC_HMAC_SECRET in the environment.\nconst crypto = require('crypto');\nconst secret = $env.WGC_HMAC_SECRET;\nif (!secret) throw new Error('WGC_HMAC_SECRET is not set'); // fail loud, never issue unsigned tokens\nconst ts = String(Date.now());\nconst nonce = crypto.randomBytes(8).toString('hex');\nconst mac = crypto.createHmac('sha256', secret).update(ts + '.' + nonce).digest('hex');\nconst token = Buffer.from(ts + '.' + nonce + '.' + mac, 'utf8').toString('base64');\nreturn [{ json: { token } }];",
+        "mode": "runOnceForAllItems"
       },
-      "id": "wf0-code",
+      "id": "0af968e4-e544-4990-9620-284b34e3d992",
       "name": "Issue HMAC token",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 0]
+      "position": [
+        224,
+        0
+      ]
     },
     {
       "parameters": {
@@ -32,17 +39,43 @@
         "responseBody": "={{ $json.token }}",
         "options": {}
       },
-      "id": "wf0-respond",
+      "id": "265697f2-1695-455e-9187-ceb7591e5124",
       "name": "Respond token",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [440, 0]
+      "position": [
+        448,
+        0
+      ]
     }
   ],
   "connections": {
-    "GET /token": { "main": [[{ "node": "Issue HMAC token", "type": "main", "index": 0 }]] },
-    "Issue HMAC token": { "main": [[{ "node": "Respond token", "type": "main", "index": 0 }]] }
+    "GET /token": {
+      "main": [
+        [
+          {
+            "node": "Issue HMAC token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issue HMAC token": {
+      "main": [
+        [
+          {
+            "node": "Respond token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
-  "pinData": {}
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
 }

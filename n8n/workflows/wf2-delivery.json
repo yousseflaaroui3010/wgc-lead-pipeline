@@ -3,27 +3,27 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "wf2-trigger",
+      "id": "228584b3-94a9-4041-a819-02db7f89551d",
       "name": "From WF-1",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
       "position": [
-        0,
-        0
+        784,
+        2736
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// WF-2 primary delivery: LeadSimple REST API, POST /rest/deals.\n//\n// Supersedes ADR-4's file-based adapter (DECISIONS 2026-08-18). The ADR read\n// its config from /home/node/.n8n/wgc/leadsimple-map.json, a bind mount left\n// over from the abandoned VPS design. Railway has no bind mounts and the\n// worker's /home/node/.n8n is wiped on every redeploy, so that file could\n// never exist. An empty catch turned \"my config is missing\" into\n// delivered_api:false, so every lead since 2026-07-22 silently took the\n// email-parse fallback for four weeks. Config is env-only now, and an absent\n// adapter is REPORTED, never swallowed.\n//\n// Contract verified live 2026-08-18 against api.leadsimple.com/rest:\n//   POST /deals, Content-Type application/x-www-form-urlencoded,\n//   Authorization: <raw key> (a Bearer prefix is also accepted),\n//   201 -> { data: { id, link, ... } }\n// LeadSimple calls a lead a \"Deal\". deal[pipeline_id] is the only required\n// field. deal[accept_duplicates] defaults to false, so LeadSimple itself\n// dedupes on email or phone.\n//\n// Env, and every one of these MUST exist on BOTH the n8n main and worker\n// services (queue mode: the worker is what executes this):\n//   LEADSIMPLE_REST_KEY     Settings > Integrations > REST API. NOT the Zapier\n//                           key, which LeadSimple documents as Zapier-only.\n//   LEADSIMPLE_PIPELINE_ID  Owner Leads\n//   LEADSIMPLE_STAGE_ID     New Lead\n//   LEADSIMPLE_SOURCE_NAME  created on first use via create_source_if_new\n//   LEADSIMPLE_API_BASE     optional override; defaults to the live base\nconst helpers = this.helpers;\nconst item = $input.all()[0];\nif (!item) throw new Error('WF-2 CRM node received no items');\nconst payload = item.json.payload;\nconst estimate = item.json.estimate || null;\nif (!payload || !payload.submission_id) throw new Error('WF-2 called without a canonical payload');\n\nconst API_BASE = ($env.LEADSIMPLE_API_BASE || 'https://api.leadsimple.com/rest').replace(/\\/+$/, '');\n\n// The credential. LEADSIMPLE_REST_KEY is the name we prefer, but Railway has\n// held a LeadSimple key under LEADSIMPLE_API_KEY since launch and that value\n// was verified 2026-08-18 to authenticate against the REST API. Accepting both\n// means lead delivery needs NO new Railway variable, which matters because\n// setting one redeploys the worker and wipes the estimator index. Which name\n// was used is REPORTED below, so this is a documented fallback, not a silent one.\nconst KEY = $env.LEADSIMPLE_REST_KEY || $env.LEADSIMPLE_API_KEY || '';\nconst KEY_SOURCE = $env.LEADSIMPLE_REST_KEY ? 'LEADSIMPLE_REST_KEY'\n  : ($env.LEADSIMPLE_API_KEY ? 'LEADSIMPLE_API_KEY (fallback)' : 'none');\n\n// Not secrets: verified live 2026-08-18 by reading the API, and recorded in\n// n8n/mapping/leadsimple-map.json. Defaults so the workflow runs correctly the\n// moment it is published. Env still wins if this client's setup ever changes.\nconst PIPELINE_ID = $env.LEADSIMPLE_PIPELINE_ID || '8c50bfc2-6377-4174-b6b2-aa5d252fcdaa'; // Owner Leads\nconst STAGE_ID = $env.LEADSIMPLE_STAGE_ID || 'eaa0001a-7e05-44f9-9eb6-8a711b91100c'; // New Lead\nconst SOURCE_NAME = $env.LEADSIMPLE_SOURCE_NAME || 'Rent Estimator - wgcassetguide.com';\n\nfunction nv(v) { return v === null || v === undefined ? '' : String(v); }\nfunction money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }\n\n// LeadSimple returns 400 validation errors in at least two different shapes,\n// observed live 2026-08-18: { error: \"deal[pipeline_id] is missing\" } for a\n// missing field, and an ARRAY OF OBJECTS for a bad pipeline id. Naive\n// stringification turned the second into \"[object Object],[object Object]\",\n// which would have been the entire content of the alert email. An unreadable\n// alarm is barely better than no alarm, so flatten whatever shape arrives.\nfunction describeError(e) {\n  function flat(v) {\n    if (v === null || v === undefined) return '';\n    if (typeof v === 'string') return v;\n    if (typeof v === 'number' || typeof v === 'boolean') return String(v);\n    if (Array.isArray(v)) return v.map(flat).filter(Boolean).join('; ');\n    if (typeof v === 'object') {\n      if (v.error !== undefined) return flat(v.error);\n      if (v.errors !== undefined) return flat(v.errors);\n      if (v.message !== undefined) return flat(v.message);\n      return Object.keys(v).map(function (k) { return k + ': ' + flat(v[k]); }).filter(Boolean).join('; ');\n    }\n    return String(v);\n  }\n  const res = e && e.response;\n  // n8n has moved the response body between these across versions, and getting\n  // it wrong means an unreadable alert, so check all of them.\n  const body = res && (res.body !== undefined ? res.body\n    : res.data !== undefined ? res.data : undefined);\n  const parts = [];\n  const fromBody = flat(body !== undefined ? body : (e && (e.error !== undefined ? e.error : undefined)));\n  if (fromBody) parts.push(fromBody);\n  const msg = String((e && e.message) || '');\n  if (msg && msg.indexOf('[object Object]') === -1 && fromBody.indexOf(msg) === -1) parts.push(msg);\n  const out = parts.join(' | ').replace(/\\s+/g, ' ').trim();\n  return (out || 'unknown error').slice(0, 500);\n}\n\n// The form stopped collecting a name when it went estimate-first (2026-07-22),\n// so the deal title is the email local-part. This is the title Jon sees in his\n// pipeline (his call, 2026-08-18). Zip is the fallback if email is ever absent.\nfunction leadTitle(p) {\n  const email = nv(p.email).trim();\n  const at = email.indexOf('@');\n  if (at > 0) return email.slice(0, at);\n  return 'Rent estimate - ' + (nv(p.zip) || 'unknown zip');\n}\nconst title = leadTitle(payload);\n\n// Readable context on the deal. LeadSimple's create-deal endpoint has no\n// external-id field, so submission_id in the comments is the only thread back\n// to an n8n execution.\nconst commentLines = [\n  'Rent analysis request from the wgcassetguide.com estimator.',\n  'Zip: ' + nv(payload.zip),\n  'Square footage: ' + nv(payload.sqft),\n  'Bedrooms: ' + nv(payload.bedrooms),\n];\nif (estimate && typeof estimate.low === 'number' && typeof estimate.high === 'number') {\n  commentLines.push('Estimate shown: ' + money(estimate.low) + ' to ' + money(estimate.high));\n  if (estimate.meta && estimate.meta.source) commentLines.push('Estimate basis: ' + estimate.meta.source);\n}\ncommentLines.push('Free guide requested: ' + (payload.ebook_opt_in ? 'yes' : 'no'));\ncommentLines.push('Submission: ' + payload.submission_id);\nconst comments = commentLines.join('\\n');\n\n// Kept as the fallback path. Labels now follow LeadSimple's documented\n// template (Phone Number, Zip Code) instead of our own invented ones, and Name\n// is populated, so the fallback has a chance of parsing where the old one had\n// a blank Name and a blank Phone on every single send.\nconst emailText = [\n  'Name: ' + title,\n  'Email: ' + nv(payload.email),\n  'Phone Number: ' + nv(payload.phone),\n  'Zip Code: ' + nv(payload.zip),\n  'Comments: ' + comments.replace(/\\n/g, ' | '),\n].join('\\n');\n\n// Was the deal actually created? Asked only after an AMBIGUOUS failure (a\n// timeout, a 5xx, a dropped connection), where the write may well have\n// succeeded before the response was lost.\n//\n// This exists because deal[accept_duplicates]=false does NOT dedupe. Verified\n// live 2026-08-18: two POSTs with the same email produced two separate deals\n// one second apart. POST /deals has no idempotency or external-id field, so a\n// blind retry is a duplicate-lead generator.\n//\n// Search quirk, also verified live: GET /deals?search=<full email> returns\n// ZERO, because the query breaks on the \"@\". The local part alone matches, and\n// so does the deal name. So we search the name and then confirm on the email.\nasync function findRecentDeal(base, key, pipelineId, title, email) {\n  try {\n    // The LISTING, deliberately, not ?search=. Verified live 2026-08-18: search\n    // did NOT find a deal in the seconds after it was created, but did find it 90s\n    // later, so search is an index with lag. This guard runs ~2s after a failed\n    // write, squarely inside that window, and a guard that reads a stale index\n    // would wave through the very duplicate it exists to stop. The listing is a\n    // direct query ordered by created_at, so our deal is at the top if it exists.\n    const url = base + '/pipelines/' + encodeURIComponent(pipelineId)\n      + '/deals?per_page=25&order_field=created_at&order_direction=desc';\n    const res = await helpers.httpRequest({\n      method: 'GET', url: url, headers: { Authorization: key },\n      returnFullResponse: true, timeout: 10000,\n    });\n    const parsed = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;\n    const rows = parsed && Array.isArray(parsed.data) ? parsed.data : [];\n    const cutoff = Date.now() - 10 * 60 * 1000;\n    for (const row of rows) {\n      if (!row || row.name !== title) continue;\n      if (new Date(row.created_at).getTime() < cutoff) continue;\n      if (email) {\n        const mails = [];\n        for (const c of (row.contacts || [])) for (const m of (c.emails || [])) mails.push(String(m).toLowerCase());\n        if (mails.indexOf(String(email).toLowerCase()) === -1) continue;\n      }\n      return row;\n    }\n  } catch (e) { /* the probe is best-effort; a failed probe must not mask the original error */ }\n  return null;\n}\n\nconst missing = [];\nif (!KEY) missing.push('LEADSIMPLE_REST_KEY (or LEADSIMPLE_API_KEY)');\nif (!PIPELINE_ID) missing.push('LEADSIMPLE_PIPELINE_ID');\n\nlet deliveredApi = false;\nlet crmError = '';\nlet dealId = '';\nlet dealLink = '';\n\nif (missing.length) {\n  // FAIL LOUD. This is the exact condition the old empty catch hid for a month.\n  crmError = 'CRM config absent, missing env var(s): ' + missing.join(', ')\n    + '. Set these on BOTH the n8n main and worker services, then Publish.';\n} else {\n  const pairs = [\n    ['deal[pipeline_id]', PIPELINE_ID],\n    ['deal[stage_id]', STAGE_ID],\n    ['deal[name]', title],\n    ['deal[source_id_or_name]', SOURCE_NAME],\n    ['deal[create_source_if_new]', SOURCE_NAME ? 'true' : ''],\n    ['deal[accept_duplicates]', 'false'],\n    ['deal[comments]', comments],\n    // Verified live 2026-08-18: omitting this makes LeadSimple invent the\n    // contact name \"Unknown Name\" (first_name \"Unknown\", last_name \"Name\"),\n    // so every estimator lead showed up nameless in the client's contact list.\n    ['contact[full_name]', title],\n    ['contact[email_addresses][]', payload.email],\n    ['property[address_zip_code]', payload.zip],\n    ['property[square_feet]', payload.sqft],\n    ['property[num_bedrooms]', payload.bedrooms],\n  ];\n  // Never sent today (buildPayload hardcodes phone ''), wired so that adding a\n  // phone field to the form needs no change here. Rails-style array-of-objects.\n  if (payload.phone) {\n    pairs.push(['contact[phone_numbers][][kind]', 'mobile']);\n    pairs.push(['contact[phone_numbers][][phone]', payload.phone]);\n  }\n  if (estimate && typeof estimate.low === 'number' && typeof estimate.high === 'number') {\n    pairs.push(['property[estimated_rent]', String(Math.round((estimate.low + estimate.high) / 2))]);\n  }\n  const body = pairs\n    .filter(function (kv) { return kv[1] !== null && kv[1] !== undefined && String(kv[1]) !== ''; })\n    .map(function (kv) { return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(String(kv[1])); })\n    .join('&');\n\n  const backoff = [2000, 8000, 30000];\n  for (let attempt = 0; attempt < 3 && !deliveredApi; attempt++) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'POST',\n        url: API_BASE + '/deals',\n        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: KEY },\n        body: body,\n        returnFullResponse: true,\n        timeout: 10000,\n      });\n      const parsed = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;\n      const deal = parsed && parsed.data;\n      // A 2xx with no id is NOT success. Without this the old failure mode\n      // (reporting delivery we never confirmed) just moves to a new home.\n      if (!deal || !deal.id) throw new Error('response carried no data.id');\n      deliveredApi = true;\n      crmError = '';\n      dealId = String(deal.id);\n      dealLink = nv(deal.link);\n    } catch (e) {\n      const status = Number((e.response && e.response.status) || e.statusCode || 0);\n      const headers = (e.response && e.response.headers) || {};\n      crmError = 'POST /deals failed' + (status ? ' (HTTP ' + status + ')' : '') + ': ' + describeError(e);\n      // Only a 429, a timeout, a 5xx or a transport error can succeed on a\n      // second attempt. A 400 or a 401 fails identically three times, which\n      // delays the alert by 10s and spends account-wide quota to learn nothing.\n      // The rate limit here is per ACCOUNT, shared with the client's other\n      // integrations, so a pointless retry is not free.\n      // A 4xx that is not 429 cannot succeed on a second attempt.\n      if (!(status === 0 || status === 408 || status === 429 || status >= 500)) {\n        crmError += ' [permanent, not retried]';\n        break;\n      }\n      // A 429 provably did NOT write, so it is always safe to retry.\n      // Anything else here is AMBIGUOUS: the deal may already exist. Look\n      // before retrying, because nothing on their side will dedupe it.\n      if (status !== 429) {\n        const found = await findRecentDeal(API_BASE, KEY, PIPELINE_ID, title, payload.email);\n        if (found && found.id) {\n          deliveredApi = true;\n          crmError = '';\n          dealId = String(found.id);\n          dealLink = nv(found.link);\n          break;\n        }\n      }\n      if (attempt < 2) {\n        // Honour the server's own backoff when it hands us one; a fixed\n        // schedule can fight another caller sharing the same account quota.\n        const retryAfter = Number(headers['x-ratelimit-retry-after']) || 0;\n        const waitMs = retryAfter > 0 ? retryAfter * 1000 : backoff[attempt];\n        await new Promise(function (r) { setTimeout(r, waitMs); });\n      }\n    }\n  }\n}\n\nreturn [{ json: {\n  delivered_api: deliveredApi,\n  crm_key_source: KEY_SOURCE,\n  crm_pipeline_id: PIPELINE_ID,\n  crm_error: crmError,\n  crm_deal_id: dealId,\n  crm_deal_link: dealLink,\n  email_text: emailText,\n  submission_id: payload.submission_id,\n  lead_name: title,\n} }];\n"
+        "jsCode": "// WF-2 primary delivery: LeadSimple REST API, POST /rest/deals.\n//\n// Supersedes ADR-4's file-based adapter (DECISIONS 2026-08-18). The ADR read\n// its config from /home/node/.n8n/wgc/leadsimple-map.json, a bind mount left\n// over from the abandoned VPS design. Railway has no bind mounts and the\n// worker's /home/node/.n8n is wiped on every redeploy, so that file could\n// never exist. An empty catch turned \"my config is missing\" into\n// delivered_api:false, so every lead since 2026-07-22 silently took the\n// email-parse fallback for four weeks. Config is env-only now, and an absent\n// adapter is REPORTED, never swallowed.\n//\n// Contract verified live 2026-08-18 against api.leadsimple.com/rest:\n//   POST /deals, Content-Type application/x-www-form-urlencoded,\n//   Authorization: <raw key> (a Bearer prefix is also accepted),\n//   201 -> { data: { id, link, ... } }\n// LeadSimple calls a lead a \"Deal\". deal[pipeline_id] is the only required\n// field. deal[accept_duplicates] defaults to false, so LeadSimple itself\n// dedupes on email or phone.\n//\n// Env, and every one of these MUST exist on BOTH the n8n main and worker\n// services (queue mode: the worker is what executes this):\n//   LEADSIMPLE_REST_KEY     Settings > Integrations > REST API. NOT the Zapier\n//                           key, which LeadSimple documents as Zapier-only.\n//   LEADSIMPLE_PIPELINE_ID  Owner Leads\n//   LEADSIMPLE_STAGE_ID     New Lead\n//   LEADSIMPLE_SOURCE_NAME  created on first use via create_source_if_new\n//   LEADSIMPLE_API_BASE     optional override; defaults to the live base\nconst helpers = this.helpers;\nconst item = $input.all()[0];\nif (!item) throw new Error('WF-2 CRM node received no items');\nconst payload = item.json.payload;\nconst estimate = item.json.estimate || null;\nif (!payload || !payload.submission_id) throw new Error('WF-2 called without a canonical payload');\n\nconst API_BASE = ($env.LEADSIMPLE_API_BASE || 'https://api.leadsimple.com/rest').replace(/\\/+$/, '');\n\n// The credential. LEADSIMPLE_REST_KEY is the name we prefer, but Railway has\n// held a LeadSimple key under LEADSIMPLE_API_KEY since launch and that value\n// was verified 2026-08-18 to authenticate against the REST API. Accepting both\n// means lead delivery needs NO new Railway variable, which matters because\n// setting one redeploys the worker and wipes the estimator index. Which name\n// was used is REPORTED below, so this is a documented fallback, not a silent one.\nconst KEY = $env.LEADSIMPLE_REST_KEY || $env.LEADSIMPLE_API_KEY || '';\nconst KEY_SOURCE = $env.LEADSIMPLE_REST_KEY ? 'LEADSIMPLE_REST_KEY'\n  : ($env.LEADSIMPLE_API_KEY ? 'LEADSIMPLE_API_KEY (fallback)' : 'none');\n\n// Not secrets: verified live 2026-08-18 by reading the API, and recorded in\n// n8n/mapping/leadsimple-map.json. Defaults so the workflow runs correctly the\n// moment it is published. Env still wins if this client's setup ever changes.\nconst PIPELINE_ID = $env.LEADSIMPLE_PIPELINE_ID || '8c50bfc2-6377-4174-b6b2-aa5d252fcdaa'; // Owner Leads\nconst STAGE_ID = $env.LEADSIMPLE_STAGE_ID || 'eaa0001a-7e05-44f9-9eb6-8a711b91100c'; // New Lead\nconst SOURCE_NAME = $env.LEADSIMPLE_SOURCE_NAME || 'Rent Estimator - wgcassetguide.com';\n\nfunction nv(v) { return v === null || v === undefined ? '' : String(v); }\nfunction money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }\n\n// LeadSimple returns 400 validation errors in at least two different shapes,\n// observed live 2026-08-18: { error: \"deal[pipeline_id] is missing\" } for a\n// missing field, and an ARRAY OF OBJECTS for a bad pipeline id. Naive\n// stringification turned the second into \"[object Object],[object Object]\",\n// which would have been the entire content of the alert email. An unreadable\n// alarm is barely better than no alarm, so flatten whatever shape arrives.\nfunction describeError(e) {\n  function flat(v) {\n    if (v === null || v === undefined) return '';\n    if (typeof v === 'string') return v;\n    if (typeof v === 'number' || typeof v === 'boolean') return String(v);\n    if (Array.isArray(v)) return v.map(flat).filter(Boolean).join('; ');\n    if (typeof v === 'object') {\n      if (v.error !== undefined) return flat(v.error);\n      if (v.errors !== undefined) return flat(v.errors);\n      if (v.message !== undefined) return flat(v.message);\n      return Object.keys(v).map(function (k) { return k + ': ' + flat(v[k]); }).filter(Boolean).join('; ');\n    }\n    return String(v);\n  }\n  const res = e && e.response;\n  // n8n has moved the response body between these across versions, and getting\n  // it wrong means an unreadable alert, so check all of them.\n  const body = res && (res.body !== undefined ? res.body\n    : res.data !== undefined ? res.data : undefined);\n  const parts = [];\n  const fromBody = flat(body !== undefined ? body : (e && (e.error !== undefined ? e.error : undefined)));\n  if (fromBody) parts.push(fromBody);\n  const msg = String((e && e.message) || '');\n  if (msg && msg.indexOf('[object Object]') === -1 && fromBody.indexOf(msg) === -1) parts.push(msg);\n  const out = parts.join(' | ').replace(/\\s+/g, ' ').trim();\n  return (out || 'unknown error').slice(0, 500);\n}\n\n// The form stopped collecting a name when it went estimate-first (2026-07-22),\n// so the deal title is the email local-part. This is the title Jon sees in his\n// pipeline (his call, 2026-08-18). Zip is the fallback if email is ever absent.\nfunction leadTitle(p) {\n  const email = nv(p.email).trim();\n  const at = email.indexOf('@');\n  if (at > 0) return email.slice(0, at);\n  return 'Rent estimate - ' + (nv(p.zip) || 'unknown zip');\n}\nconst title = leadTitle(payload);\n\n// Readable context on the deal. LeadSimple's create-deal endpoint has no\n// external-id field, so submission_id in the comments is the only thread back\n// to an n8n execution.\nconst commentLines = [\n  'Rent analysis request from the wgcassetguide.com estimator.',\n  'Zip: ' + nv(payload.zip),\n  'Square footage: ' + nv(payload.sqft),\n  'Bedrooms: ' + nv(payload.bedrooms),\n];\nif (estimate && typeof estimate.low === 'number' && typeof estimate.high === 'number') {\n  commentLines.push('Estimate shown: ' + money(estimate.low) + ' to ' + money(estimate.high));\n  if (estimate.meta && estimate.meta.source) commentLines.push('Estimate basis: ' + estimate.meta.source);\n}\ncommentLines.push('Free guide requested: ' + (payload.ebook_opt_in ? 'yes' : 'no'));\ncommentLines.push('Submission: ' + payload.submission_id);\nconst comments = commentLines.join('\\n');\n\n// Kept as the fallback path. Labels now follow LeadSimple's documented\n// template (Phone Number, Zip Code) instead of our own invented ones, and Name\n// is populated, so the fallback has a chance of parsing where the old one had\n// a blank Name and a blank Phone on every single send.\nconst emailText = [\n  'Name: ' + title,\n  'Email: ' + nv(payload.email),\n  'Phone Number: ' + nv(payload.phone),\n  'Zip Code: ' + nv(payload.zip),\n  'Comments: ' + comments.replace(/\\n/g, ' | '),\n].join('\\n');\n\n// Was the deal actually created? Asked only after an AMBIGUOUS failure (a\n// timeout, a 5xx, a dropped connection), where the write may well have\n// succeeded before the response was lost.\n//\n// This exists because deal[accept_duplicates]=false does NOT dedupe. Verified\n// live 2026-08-18: two POSTs with the same email produced two separate deals\n// one second apart. POST /deals has no idempotency or external-id field, so a\n// blind retry is a duplicate-lead generator.\n//\n// Search quirk, also verified live: GET /deals?search=<full email> returns\n// ZERO, because the query breaks on the \"@\". The local part alone matches, and\n// so does the deal name. So we search the name and then confirm on the email.\nasync function findRecentDeal(base, key, pipelineId, title, email) {\n  try {\n    // The LISTING, deliberately, not ?search=. Verified live 2026-08-18: search\n    // did NOT find a deal in the seconds after it was created, but did find it 90s\n    // later, so search is an index with lag. This guard runs ~2s after a failed\n    // write, squarely inside that window, and a guard that reads a stale index\n    // would wave through the very duplicate it exists to stop. The listing is a\n    // direct query ordered by created_at, so our deal is at the top if it exists.\n    const url = base + '/pipelines/' + encodeURIComponent(pipelineId)\n      + '/deals?per_page=25&order_field=created_at&order_direction=desc';\n    const res = await helpers.httpRequest({\n      method: 'GET', url: url, headers: { Authorization: key },\n      returnFullResponse: true, timeout: 10000,\n    });\n    const parsed = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;\n    const rows = parsed && Array.isArray(parsed.data) ? parsed.data : [];\n    const cutoff = Date.now() - 10 * 60 * 1000;\n    for (const row of rows) {\n      if (!row || row.name !== title) continue;\n      if (new Date(row.created_at).getTime() < cutoff) continue;\n      if (email) {\n        const mails = [];\n        for (const c of (row.contacts || [])) for (const m of (c.emails || [])) mails.push(String(m).toLowerCase());\n        if (mails.indexOf(String(email).toLowerCase()) === -1) continue;\n      }\n      return row;\n    }\n  } catch (e) { /* the probe is best-effort; a failed probe must not mask the original error */ }\n  return null;\n}\n\nconst missing = [];\nif (!KEY) missing.push('LEADSIMPLE_REST_KEY (or LEADSIMPLE_API_KEY)');\nif (!PIPELINE_ID) missing.push('LEADSIMPLE_PIPELINE_ID');\n\nlet deliveredApi = false;\nlet crmError = '';\nlet dealId = '';\nlet dealLink = '';\n\nif (missing.length) {\n  // FAIL LOUD. This is the exact condition the old empty catch hid for a month.\n  crmError = 'CRM config absent, missing env var(s): ' + missing.join(', ')\n    + '. Set these on BOTH the n8n main and worker services, then Publish.';\n} else {\n  const pairs = [\n    ['deal[pipeline_id]', PIPELINE_ID],\n    ['deal[stage_id]', STAGE_ID],\n    ['deal[name]', title],\n    ['deal[source_id_or_name]', SOURCE_NAME],\n    ['deal[create_source_if_new]', SOURCE_NAME ? 'true' : ''],\n    ['deal[accept_duplicates]', 'false'],\n    ['deal[comments]', comments],\n    // Verified live 2026-08-18: omitting this makes LeadSimple invent the\n    // contact name \"Unknown Name\" (first_name \"Unknown\", last_name \"Name\"),\n    // so every estimator lead showed up nameless in the client's contact list.\n    ['contact[full_name]', title],\n    ['contact[email_addresses][]', payload.email],\n    ['property[address_zip_code]', payload.zip],\n    ['property[square_feet]', payload.sqft],\n    ['property[num_bedrooms]', payload.bedrooms],\n  ];\n  // Never sent today (buildPayload hardcodes phone ''), wired so that adding a\n  // phone field to the form needs no change here. Rails-style array-of-objects.\n  if (payload.phone) {\n    pairs.push(['contact[phone_numbers][][kind]', 'mobile']);\n    pairs.push(['contact[phone_numbers][][phone]', payload.phone]);\n  }\n  if (estimate && typeof estimate.low === 'number' && typeof estimate.high === 'number') {\n    pairs.push(['property[estimated_rent]', String(Math.round((estimate.low + estimate.high) / 2))]);\n  }\n  const body = pairs\n    .filter(function (kv) { return kv[1] !== null && kv[1] !== undefined && String(kv[1]) !== ''; })\n    .map(function (kv) { return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(String(kv[1])); })\n    .join('&');\n\n  const backoff = [2000, 8000, 30000];\n  for (let attempt = 0; attempt < 3 && !deliveredApi; attempt++) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'POST',\n        url: API_BASE + '/deals',\n        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: KEY },\n        body: body,\n        returnFullResponse: true,\n        timeout: 10000,\n      });\n      const parsed = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;\n      const deal = parsed && parsed.data;\n      // A 2xx with no id is NOT success. Without this the old failure mode\n      // (reporting delivery we never confirmed) just moves to a new home.\n      if (!deal || !deal.id) throw new Error('response carried no data.id');\n      deliveredApi = true;\n      crmError = '';\n      dealId = String(deal.id);\n      dealLink = nv(deal.link);\n    } catch (e) {\n      const status = Number((e.response && e.response.status) || e.statusCode || 0);\n      const headers = (e.response && e.response.headers) || {};\n      crmError = 'POST /deals failed' + (status ? ' (HTTP ' + status + ')' : '') + ': ' + describeError(e);\n      // Only a 429, a timeout, a 5xx or a transport error can succeed on a\n      // second attempt. A 400 or a 401 fails identically three times, which\n      // delays the alert by 10s and spends account-wide quota to learn nothing.\n      // The rate limit here is per ACCOUNT, shared with the client's other\n      // integrations, so a pointless retry is not free.\n      // A 4xx that is not 429 cannot succeed on a second attempt.\n      if (!(status === 0 || status === 408 || status === 429 || status >= 500)) {\n        crmError += ' [permanent, not retried]';\n        break;\n      }\n      // A 429 provably did NOT write, so it is always safe to retry.\n      // Anything else here is AMBIGUOUS: the deal may already exist. Look\n      // before retrying, because nothing on their side will dedupe it.\n      if (status !== 429) {\n        const found = await findRecentDeal(API_BASE, KEY, PIPELINE_ID, title, payload.email);\n        if (found && found.id) {\n          deliveredApi = true;\n          crmError = '';\n          dealId = String(found.id);\n          dealLink = nv(found.link);\n          break;\n        }\n      }\n      if (attempt < 2) {\n        // Honour the server's own backoff when it hands us one; a fixed\n        // schedule can fight another caller sharing the same account quota.\n        const retryAfter = Number(headers['x-ratelimit-retry-after']) || 0;\n        const waitMs = retryAfter > 0 ? retryAfter * 1000 : backoff[attempt];\n        await new Promise(function (r) { setTimeout(r, waitMs); });\n      }\n    }\n  }\n}\n\nreturn [{ json: {\n  delivered_api: deliveredApi,\n  crm_key_source: KEY_SOURCE,\n  crm_pipeline_id: PIPELINE_ID,\n  crm_error: crmError,\n  crm_deal_id: dealId,\n  crm_deal_link: dealLink,\n  email_text: emailText,\n  submission_id: payload.submission_id,\n  lead_name: title,\n} }];\n",
+        "mode": "runOnceForAllItems"
       },
-      "id": "wf2-api",
+      "id": "ed8b61e1-ab26-40f1-8c5a-315c82a3b500",
       "name": "CRM API attempt (mapped)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
-        0
+        1248,
+        2720
       ]
     },
     {
@@ -31,19 +31,18 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ $json.delivered_api }}",
-              "value2": false
+              "value1": "={{ $json.delivered_api }}"
             }
           ]
         }
       },
-      "id": "wf2-if",
+      "id": "f6b6c51f-96bb-43d5-a7a2-0226a01b846a",
       "name": "API failed or disabled?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        440,
-        0
+        1456,
+        2720
       ]
     },
     {
@@ -70,13 +69,13 @@
           "timeout": 15000
         }
       },
-      "id": "wf2-parse-mail",
+      "id": "22d86202-3e75-4b9c-82a7-afe913c6d83f",
       "name": "Fallback: email-parse path",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
-        -120
+        1664,
+        2464
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -107,13 +106,13 @@
           "timeout": 15000
         }
       },
-      "id": "wf2-notify",
+      "id": "9d87e01c-9332-49bf-8971-24366acb2aa0",
       "name": "Notify Jon + Ashley + Youssef",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
-        0
+        1888,
+        2736
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -122,16 +121,16 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Record which path delivered (feeds WF-3 weekly export, instrument I1).\nconst fs = require('fs');\nconst METRICS = '/home/node/.n8n/wgc-metrics.json';\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync(METRICS, 'utf8')); } catch (e) { /* first run */ }\nconst day = new Date().toISOString().slice(0, 10);\nm.days[day] = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nm.days[day][$('CRM API attempt (mapped)').first().json.delivered_api ? 'delivered_api' : 'delivered_email'] += 1;\nfs.writeFileSync(METRICS, JSON.stringify(m));\nreturn [{ json: { delivered: true, submission_id: $('CRM API attempt (mapped)').first().json.submission_id } }];"
+        "jsCode": "// Record which path delivered (feeds WF-3 weekly export, instrument I1).\nconst fs = require('fs');\nconst METRICS = '/home/node/.n8n/wgc-metrics.json';\nlet m = { days: {} };\ntry { m = JSON.parse(fs.readFileSync(METRICS, 'utf8')); } catch (e) { /* first run */ }\nconst day = new Date().toISOString().slice(0, 10);\nm.days[day] = m.days[day] || { submissions: 0, bots: 0, delivered_api: 0, delivered_email: 0 };\nm.days[day][$('CRM API attempt (mapped)').first().json.delivered_api ? 'delivered_api' : 'delivered_email'] += 1;\nfs.writeFileSync(METRICS, JSON.stringify(m));\nreturn [{ json: { delivered: true, submission_id: $('CRM API attempt (mapped)').first().json.submission_id } }];",
+        "mode": "runOnceForAllItems"
       },
-      "id": "wf2-mark",
+      "id": "a0da25ca-4ebc-4bf0-a5b4-70ac2d4908f1",
       "name": "Mark delivered",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
-        0
+        2112,
+        2736
       ]
     },
     {
@@ -145,13 +144,13 @@
           ]
         }
       },
-      "id": "wf2-ebook-if",
+      "id": "6d06e60e-93c9-4e3b-9abb-1bea735faa3c",
       "name": "Ebook requested?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        220,
-        220
+        1248,
+        2336
       ]
     },
     {
@@ -178,13 +177,13 @@
           "timeout": 15000
         }
       },
-      "id": "wf2-ebook-send",
+      "id": "557bde09-6030-4209-9ea9-c88cab710cd4",
       "name": "Send guide email (Brevo)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        440,
-        220
+        1472,
+        2320
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -203,13 +202,13 @@
           ]
         }
       },
-      "id": "wf2-has-contact",
+      "id": "169118b9-fbdb-4305-99da-98abc55e961a",
       "name": "Has contact?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        110,
-        0
+        1024,
+        2736
       ]
     },
     {
@@ -236,13 +235,13 @@
           "timeout": 15000
         }
       },
-      "id": "wgc-crm-delivery-alert",
+      "id": "52a2ff2c-36cb-4cb8-a686-5783e9f8ce5e",
       "name": "Alert: CRM delivery failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
-        80
+        1664,
+        2720
       ],
       "retryOnFail": true
     }
@@ -267,8 +266,7 @@
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "CRM API attempt (mapped)": {
@@ -340,14 +338,16 @@
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     }
   },
   "settings": {
     "executionOrder": "v1",
-    "errorWorkflow": "HAknPGtFSfudoqr2"
-  },
-  "pinData": {}
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "HAknPGtFSfudoqr2",
+    "callerPolicy": "workflowsFromSameOwner"
+  }
 }
