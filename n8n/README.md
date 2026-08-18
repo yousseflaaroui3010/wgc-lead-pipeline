@@ -19,10 +19,13 @@ verify each Code node still shows its script afterwards).**
 5. Replace `REPLACE-HOOK-ID` in the WF-0 and WF-1 webhook paths with the
    value of `WGC_HOOK_ID` from `infra/.env` (random segment, TD-3
    non-guessable paths; nginx rewrites `/hook/*` to it).
-6. Copy `mapping/leadsimple-map.json` to the container path
-   `/home/node/.n8n/wgc/leadsimple-map.json` (the compose file mounts
-   `n8n/mapping/` there read-only — edits on the host take effect on the
-   next lead).
+6. ~~Copy `mapping/leadsimple-map.json` into the container.~~ **REMOVED
+   2026-08-18.** WF-2 no longer reads any file. That bind mount only ever
+   worked under this compose file; on Railway there are no bind mounts and
+   the worker's `/home/node/.n8n` is wiped on every redeploy, so the file
+   could never exist and every lead silently took the email-parse fallback
+   for four weeks. CRM config is env-only now (see the table below), and
+   `mapping/leadsimple-map.json` is reference documentation, not config.
 7. **Publish** all four workflows (n8n 2.0 replaced the Active toggle with
    a Publish button, top-right / Shift+P; confirmed on 2.29.10, 2026-07-12).
    Re-publish after every edit — saved-but-unpublished changes are not live.
@@ -33,8 +36,13 @@ verify each Code node still shows its script afterwards).**
 | Var | Used by | Purpose |
 |---|---|---|
 | `WGC_HMAC_SECRET` | WF-0, WF-1 | render-token HMAC key (ADR-2) |
-| `LEADSIMPLE_API_KEY` | WF-2 | CRM REST auth — absent until Jon's admin creates it |
-| `PARSE_ADDRESS` | WF-2 | LeadSimple per-Source email-parse address |
+| `LEADSIMPLE_REST_KEY` | WF-2 | **primary CRM auth.** LeadSimple → Settings → Integrations → REST API (enable access first, then the key appears). NOT the Zapier key |
+| `LEADSIMPLE_PIPELINE_ID` | WF-2 | `8c50bfc2-6377-4174-b6b2-aa5d252fcdaa` (Owner Leads) |
+| `LEADSIMPLE_STAGE_ID` | WF-2 | `eaa0001a-7e05-44f9-9eb6-8a711b91100c` (New Lead) |
+| `LEADSIMPLE_SOURCE_NAME` | WF-2 | `Rent Estimator - wgcassetguide.com`, created on first use via `create_source_if_new` |
+| `LEADSIMPLE_API_BASE` | WF-2 | optional override; defaults to `https://api.leadsimple.com/rest` |
+| `LEADSIMPLE_API_KEY` | — | **DEAD.** The Zapier-only key. LeadSimple's own docs say verbatim "(This API Key is only valid for Zapier)", so it was never a REST credential. Safe to delete from Railway |
+| `PARSE_ADDRESS` | WF-2 | LeadSimple per-Source email-parse address; now the FALLBACK only |
 | `NOTIFY_EMAILS` | WF-2 | Jon, Ashley, Youssef (comma-separated) |
 | `ALERT_EMAIL` | WF-3 | Youssef |
 | `MAIL_FROM` | WF-2, WF-3 | sender on the transactional relay |

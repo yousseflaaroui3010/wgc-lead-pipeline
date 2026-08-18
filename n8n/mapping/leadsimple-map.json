@@ -1,23 +1,92 @@
 {
-  "_comment": "ADR-4 schema adapter. ALL LeadSimple REST specifics live here and nowhere else. Field names are UNVERIFIED until the admin API key arrives - read app.leadsimple.com/api_docs FIRST, then fill url/auth_header/field_map and set enabled=true. While enabled=false, WF-2 routes every lead to the email-parse path, which is launch-sufficient (acceptance G-2).",
-  "enabled": false,
-  "url": "UNVERIFIED-SET-FROM-LEADSIMPLE-API-DOCS",
-  "auth_header": "Authorization",
-  "field_map": {
-    "name": "UNVERIFIED_name",
-    "email": "UNVERIFIED_email",
-    "phone": "UNVERIFIED_phone",
-    "zip": "UNVERIFIED_zip",
-    "sqft": "UNVERIFIED_sqft",
-    "bedrooms": "UNVERIFIED_bedrooms",
-    "ebook_opt_in": "UNVERIFIED_ebook_opt_in",
-    "source": "UNVERIFIED_source",
-    "consent.implied": "UNVERIFIED_consent_implied",
-    "consent.text_version": "UNVERIFIED_consent_text_version",
-    "consent.ts": "UNVERIFIED_consent_ts",
-    "consent.ip": "UNVERIFIED_consent_ip",
-    "consent.ua": "UNVERIFIED_consent_user_agent",
-    "submission_id": "UNVERIFIED_external_id"
+  "_STATUS": "REFERENCE ONLY. NOT READ AT RUNTIME. Editing this file changes NOTHING.",
+  "_why": [
+    "ADR-4 made this file the single home for CRM specifics and had WF-2 read it",
+    "from /home/node/.n8n/wgc/leadsimple-map.json, bind-mounted by",
+    "infra/docker-compose.yml. That was the abandoned VPS design. Production is",
+    "Railway, which has no bind mounts, and the n8n worker's /home/node/.n8n is",
+    "ephemeral. The file therefore NEVER existed in production, an empty catch",
+    "swallowed the miss, and delivered_api was false for every lead from",
+    "2026-07-22 to 2026-08-18 with nobody told. See DECISIONS 2026-08-18.",
+    "ADR-4's intent (one documented home for CRM specifics) is kept by this file.",
+    "ADR-4's mechanism (reading it at runtime) is superseded by env vars."
+  ],
+  "_runtime_config_lives_in": {
+    "LEADSIMPLE_REST_KEY": "secret. LeadSimple > Settings > Integrations > REST API",
+    "LEADSIMPLE_PIPELINE_ID": "8c50bfc2-6377-4174-b6b2-aa5d252fcdaa",
+    "LEADSIMPLE_STAGE_ID": "eaa0001a-7e05-44f9-9eb6-8a711b91100c",
+    "LEADSIMPLE_SOURCE_NAME": "Rent Estimator - wgcassetguide.com",
+    "LEADSIMPLE_API_BASE": "optional; defaults to https://api.leadsimple.com/rest",
+    "_note": "Queue mode: set every one on BOTH the n8n main AND worker services."
   },
-  "static_fields": {}
+
+  "_contract_verified_live_2026-08-18": {
+    "base_url": "https://api.leadsimple.com/rest",
+    "create_lead": "POST /deals",
+    "content_type": "application/x-www-form-urlencoded",
+    "auth_header": "Authorization: <raw key>",
+    "auth_note": "A 'Bearer <key>' prefix also returns 200; the swagger declares a bare apiKey header, so we send the raw key.",
+    "success": "201 -> { data: { id, link, ... } }. A 2xx with no data.id is NOT treated as delivery.",
+    "documented_errors": "401 Errors::Authorization, 404 Errors::NotFound. No 400 is documented on POST /deals even though POST /webhook_subscriptions documents one, so how a bad field surfaces is UNVERIFIED.",
+    "rate_limits": "Per ACCOUNT, not per key, 1-minute window. Observed 100 requests / 1000 records. Read X-RateLimit-Retry-After rather than assuming a fixed backoff.",
+    "spec_version": "info.version 0.0.1 - young API, prove behaviour by running it",
+    "no_idempotency_key": "POST /deals has no external_id or idempotency field.",
+    "CORRECTION_accept_duplicates": [
+      "An earlier version of this file claimed deal[accept_duplicates]=false gives",
+      "server-side dedupe on email or phone. THAT IS WRONG. Measured live",
+      "2026-08-18: two POSTs with the same email produced two separate deals",
+      "(db4f8e27, 60e5a983) one second apart. They shared ONE contact",
+      "(4369952e) but got TWO property and TWO unit records. So the flag",
+      "dedupes the CONTACT, not the DEAL. Do not rely on it to prevent",
+      "duplicate leads. WF-2 carries its own guard instead."
+    ],
+    "CORRECTION_search_is_not_a_read_back": [
+      "An earlier version claimed GET /deals?search=<email> is the read-back that",
+      "makes delivery provable. It is not, for TWO reasons measured live:",
+      "1. search on a FULL email returns 0 hits, always. The query breaks on the",
+      "   '@'. The local part alone matches; the domain alone matched 14 deals.",
+      "2. search is an INDEX and it LAGS. A deal created seconds earlier was not",
+      "   found by search, then was found 90s later. Immediately after a create:",
+      "   'listing=FOUND search(name)=0 search(full email)=0'.",
+      "The reliable read-backs are GET /deals/{id} using the id from the 201, and",
+      "GET /pipelines/{id}/deals?order_field=created_at&order_direction=desc,",
+      "which is a direct ordered query and is consistent immediately."
+    ],
+    "terminology": "LeadSimple calls a lead a Deal. deal[pipeline_id] is the ONLY required field."
+  },
+
+  "_write_shape_is_not_read_shape": {
+    "_note": "Verified live 2026-08-18 on a created deal. Asserting the write-side names against a read response reports data loss that is not happening.",
+    "property[address_zip_code]": "reads back as property.zip_code",
+    "property[square_feet]": "reads back as property.unit.square_feet",
+    "property[num_bedrooms]": "reads back as property.unit.num_bedrooms (as a string, e.g. \"3.0\")",
+    "property[estimated_rent]": "reads back as property.unit.estimated_rent (string, e.g. \"1900.0\")",
+    "contact[full_name]": "title-cased and split on separators: \"jsmith-happy\" becomes \"Jsmith Happy\". OMITTING IT makes LeadSimple invent the contact name \"Unknown Name\"."
+  },
+
+  "_field_map_real_names": {
+    "lead title": "deal[name]",
+    "email": "contact[email_addresses][]  (array of strings)",
+    "phone": "contact[phone_numbers][][kind] + contact[phone_numbers][][phone]  (array of objects, e.g. kind=mobile)",
+    "full name": "contact[full_name]  (LeadSimple parses it into first/last; unused, the form collects no name)",
+    "zip": "property[address_zip_code]",
+    "sqft": "property[square_feet]",
+    "bedrooms": "property[num_bedrooms]",
+    "rent estimate": "property[estimated_rent]",
+    "extras + submission_id": "deal[comments]",
+    "source": "deal[source_id_or_name] + deal[create_source_if_new]",
+    "stage": "deal[stage_id]",
+    "dedupe": "deal[accept_duplicates] (default false)"
+  },
+
+  "_useful_reads": {
+    "auth smoke test": "GET /info/account",
+    "pipelines": "GET /pipelines",
+    "stages": "GET /pipelines/{pipeline_id}/stages",
+    "sources": "GET /pipelines/{pipeline_id}/sources",
+    "read back one deal": "GET /deals/{deal_id}  <- ALWAYS consistent, use the id from the 201",
+    "read back a just-written deal": "GET /pipelines/{id}/deals?per_page=25&order_field=created_at&order_direction=desc  <- consistent IMMEDIATELY, this is what the duplicate guard reads",
+    "find a deal by email": "DOES NOT WORK. GET /deals?search=<full email> returns 0 every time; the query breaks on the '@'. Search the local part instead, and only after the index catches up (~tens of seconds).",
+    "webhooks": "POST /webhook_subscriptions { event_name, target_url }; event enum includes deal/created"
+  }
 }
