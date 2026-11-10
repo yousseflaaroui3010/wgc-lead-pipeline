@@ -22,9 +22,15 @@ PRD-02 v1.1 §E (canonical lead schema v1.0) and TD-1..TD-4 in
 - Bot rejects always return success-shaped bodies — no oracle (G-3).
 - Never integrate against Propertyware (Rent Engine migration ~Sept 2026).
 - Secrets in `infra/.env` only; never in client JS or git.
+- The widget talks to the wgcassetguide.com lead GATEWAY (`/api/leads`, code in
+  westromhub1 `api/src/routes/leads.ts`), never to n8n directly. WF-0/WF-1 refuse
+  non-gateway calls once `WGC_GATEWAY_SECRET` is set (2026-11-10). Rate limits,
+  token-reuse caps and guide-email caps live in the gateway, not here.
+- After `npm run build`, copy `widget/dist/embed.js` to westromhub1
+  `public/embed.js` (that is the copy production serves).
 
 ## Commands
-- `npm test` — 101 tests (validation matrix, payload contract, a11y,
+- `npm test` — 154 tests (validation matrix, payload contract, a11y,
   estimator parity, and WF-2 CRM delivery)
 - `npm run build` — esbuild → `widget/dist/embed.js` + gzip size gate
 - `npm run check` — both; must pass before any commit

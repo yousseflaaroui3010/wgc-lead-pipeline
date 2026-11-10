@@ -7,10 +7,12 @@
 // that label MUST bump this version string. (Was implied-by-submitting in v2.)
 export const CONSENT_TEXT_VERSION = 'v3-explicit-2026-07-22';
 
-// #13 API_BASE: Railway production webhook base incl. the hook segment
-// (public by design once the form ships; bot defense is the HMAC token, not
-// path secrecy). Dev pages override via the data-endpoint attribute.
-export const DEFAULT_API_BASE = 'https://main-production-bf72.up.railway.app/webhook/d043c102d78e';
+// #13 API_BASE: the wgcassetguide.com lead gateway (2026-11-10). It proxies
+// /token and /lead to the n8n webhooks after per-visitor rate limits, token
+// reuse caps, guide-email caps and (optionally) Turnstile. Calling n8n
+// directly is refused once WGC_GATEWAY_SECRET is set there. Dev pages
+// override via the data-endpoint attribute.
+export const DEFAULT_API_BASE = 'https://wgcassetguide.com/api/leads';
 
 const FETCH_TIMEOUT_MS = 10000;
 // Server enforces a 2s–2h token age window; refresh client-side well before
@@ -103,6 +105,7 @@ export function submitLead(endpoint, payload, extras) {
     fax: extras.honeypot || '', // honeypot; renamed from "company" (autofill false-positive)
     fill_ms: extras.fillMs,
   });
+  if (extras.turnstile) body.turnstile = extras.turnstile;
   return fetchWithTimeout(endpoint + '/lead', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -110,5 +113,46 @@ export function submitLead(endpoint, payload, extras) {
   }).then(function (res) {
     if (!res.ok) throw new Error('submit failed: ' + res.status);
     return res.json().catch(function () { return {}; });
+  });
+}
+
+// Optional Cloudflare Turnstile (data-turnstile-sitekey). Turnstile cannot
+// render inside a shadow root, so it gets a light-DOM slot right after the
+// mount element. "interaction-only": invisible unless Cloudflare wants a
+// click. Rejects on failure so the visitor sees the retry panel instead of a
+// silent server-side drop.
+var turnstileLoad = null;
+export function getTurnstileToken(sitekey, anchor) {
+  if (!turnstileLoad) {
+    turnstileLoad = new Promise(function (resolve, reject) {
+      if (window.turnstile) return resolve(window.turnstile);
+      var s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true;
+      s.onload = function () { window.turnstile ? resolve(window.turnstile) : reject(new Error('turnstile')); };
+      s.onerror = function () { turnstileLoad = null; reject(new Error('turnstile')); };
+      document.head.appendChild(s);
+    });
+  }
+  return turnstileLoad.then(function (ts) {
+    return new Promise(function (resolve, reject) {
+      var slot = document.createElement('div');
+      anchor.insertAdjacentElement('afterend', slot);
+      var id;
+      var timer = setTimeout(function () { done(reject, new Error('turnstile timeout')); }, 30000);
+      function done(fn, v) {
+        clearTimeout(timer);
+        try { ts.remove(id); } catch (e) { /* already removed */ }
+        slot.remove();
+        fn(v);
+      }
+      id = ts.render(slot, {
+        sitekey: sitekey,
+        action: 'lead',
+        appearance: 'interaction-only',
+        callback: function (t) { done(resolve, t); },
+        'error-callback': function () { done(reject, new Error('turnstile')); },
+      });
+    });
   });
 }

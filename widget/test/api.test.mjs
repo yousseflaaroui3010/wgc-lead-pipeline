@@ -6,6 +6,8 @@ import {
   buildPayload,
   newSubmissionId,
   CONSENT_TEXT_VERSION,
+  DEFAULT_API_BASE,
+  submitLead,
 } from '../src/api.js';
 
 // A validateAll() output for an opted-in visitor (no name/phone collected).
@@ -74,4 +76,25 @@ test('newSubmissionId returns UUID v4 shape (incl. non-randomUUID fallback)', ()
   } finally {
     Object.defineProperty(globalThis.crypto, 'randomUUID', { value: original, configurable: true });
   }
+});
+
+// --- Gateway cutover (2026-11-10) ---
+
+test('default endpoint is the wgcassetguide.com gateway, not the n8n host', () => {
+  assert.equal(DEFAULT_API_BASE, 'https://wgcassetguide.com/api/leads');
+  assert.ok(!/railway\.app/.test(DEFAULT_API_BASE));
+});
+
+test('submitLead sends the Turnstile token only when one was obtained', async () => {
+  const bodies = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { bodies.push(JSON.parse(init.body)); return new Response('{"ok":true}'); };
+  try {
+    await submitLead('https://x/api/leads', { zip: '76102' }, { token: 't', honeypot: '', fillMs: 5000 });
+    await submitLead('https://x/api/leads', { zip: '76102' }, { token: 't', honeypot: '', fillMs: 5000, turnstile: 'cf-tok' });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok(!('turnstile' in bodies[0]));
+  assert.equal(bodies[1].turnstile, 'cf-tok');
 });
