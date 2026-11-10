@@ -27,7 +27,7 @@ Paste this where the form should appear (Elementor: an HTML widget):
 - **One embed per page** (the widget mounts on the `wgc-analysis` id).
 - It renders in a Shadow DOM: your theme's CSS cannot break it and its CSS
   cannot touch your page. No stylesheet work needed.
-- ~5 KB gzipped, loads `async`, reserves its own height — no layout shift,
+- ~12 KB gzipped, loads `async`, reserves its own height — no layout shift,
   no effect on your page speed scores.
 - `data-source` tags where the lead came from; keep the value above for
   westromgroup.com pages so reporting stays clean.
