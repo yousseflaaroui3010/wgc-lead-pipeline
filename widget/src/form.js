@@ -10,6 +10,7 @@ import {
   newSubmissionId,
   buildPayload,
   submitLead,
+  getTurnstileToken,
   DEFAULT_API_BASE,
 } from './api.js';
 import { STRINGS, buildSuccessHtml, escapeHtml } from './success.js';
@@ -125,6 +126,9 @@ function readConfig(script) {
     source: script.getAttribute('data-source') || 'Website - wgcassetguide',
     privacyUrl: script.getAttribute('data-privacy-url') || 'https://wgcassetguide.com/privacy',
     fallbackUrl: script.getAttribute('data-fallback-url') || 'https://wgcassetguide.com/analysis',
+    // Public Turnstile site key. Set it only once the gateway is ready to
+    // verify (LEAD_REQUIRE_TURNSTILE); absent = no challenge.
+    turnstileSiteKey: script.getAttribute('data-turnstile-sitekey') || '',
     // Unrecognized values fall back to today's default (inline) rather than
     // silently rendering nothing.
     mode: mode === 'popup' ? 'popup' : 'inline',
@@ -321,8 +325,18 @@ export function mount(script) {
 
       tokens
         .ensureFresh()
-        .then(function (token) { extras.token = token || ''; return submitLead(cfg.endpoint, payload, extras); })
+        .then(function (token) {
+          extras.token = token || '';
+          return cfg.turnstileSiteKey ? getTurnstileToken(cfg.turnstileSiteKey, host) : '';
+        })
+        .then(function (challenge) {
+          if (challenge) extras.turnstile = challenge;
+          return submitLead(cfg.endpoint, payload, extras);
+        })
         .then(function (resp) {
+          // The gateway caps submissions per render token; start the next
+          // form (if any) on a fresh one.
+          tokens.refresh().catch(function () { /* retried on interaction */ });
           renderSuccess(resp, { ebookOptIn: optedIn, zip: checked.data.zip });
           // A lead only exists when the visitor opted in; an estimate-only
           // view is not a lead and must not fire the delivered event.

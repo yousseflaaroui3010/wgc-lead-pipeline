@@ -36,6 +36,7 @@ verify each Code node still shows its script afterwards).**
 | Var | Used by | Purpose |
 |---|---|---|
 | `WGC_HMAC_SECRET` | WF-0, WF-1 | render-token HMAC key (ADR-2) |
+| `WGC_GATEWAY_SECRET` | WF-0, WF-1 | **gateway lock (2026-11-10).** Same value as `N8N_GATEWAY_SECRET` on the wgcassetguide.com API. Set = only the `/api/leads/*` gateway can get tokens or submit; unset = open (pre-gateway). Set on BOTH main and worker; see `infra/runbooks/gateway-cutover.md` |
 | `LEADSIMPLE_REST_KEY` | WF-2 | **primary CRM auth.** LeadSimple → Settings → Integrations → REST API (enable access first, then the key appears). NOT the Zapier key |
 | `LEADSIMPLE_PIPELINE_ID` | WF-2 | `8c50bfc2-6377-4174-b6b2-aa5d252fcdaa` (Owner Leads) |
 | `LEADSIMPLE_STAGE_ID` | WF-2 | `eaa0001a-7e05-44f9-9eb6-8a711b91100c` (New Lead) |
@@ -61,6 +62,12 @@ verify each Code node still shows its script afterwards).**
   HTTP response semantics.
 - **No oracle:** every rejection (honeypot, token, validation, duplicate,
   nginx rate limit) returns the same success-shaped body (G-3).
+- **Gateway (2026-11-10):** the public entry point is
+  `https://wgcassetguide.com/api/leads/{token,lead}` (westromhub1
+  `api/src/routes/leads.ts`). It owns per-visitor rate limits, the 3-uses-per-
+  token cap, one guide email per address per 24h, daily caps and optional
+  Turnstile, and passes the visitor IP/UA as `X-WGC-Client-IP/UA`. On Railway
+  there is no nginx in front of n8n, so before this there was no rate limit.
 - **Metrics file** `/home/node/.n8n/wgc-metrics.json` holds daily counters
   only — never PII. It feeds the zero-submission alert and the weekly I1
   export. Single-writer volume is fine at this scale; if executions ever

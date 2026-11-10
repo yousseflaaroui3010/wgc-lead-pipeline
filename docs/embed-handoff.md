@@ -17,14 +17,17 @@ Paste this where the form should appear (Elementor: an HTML widget):
 </div>
 <script src="https://wgcassetguide.com/embed.js" async
   data-widget="rental-analysis"
-  data-endpoint="https://wgcassetguide.com/hook"
+  data-endpoint="https://wgcassetguide.com/api/leads"
   data-source="Website - westromgroup"></script>
 ```
 
+- `data-endpoint` is the wgcassetguide.com lead gateway (it rate-limits and
+  forwards to our pipeline). Older copies of this snippet used `/hook`; that
+  still works. Never point it at the n8n `*.up.railway.app` host.
 - **One embed per page** (the widget mounts on the `wgc-analysis` id).
 - It renders in a Shadow DOM: your theme's CSS cannot break it and its CSS
   cannot touch your page. No stylesheet work needed.
-- ~5 KB gzipped, loads `async`, reserves its own height — no layout shift,
+- ~12 KB gzipped, loads `async`, reserves its own height — no layout shift,
   no effect on your page speed scores.
 - `data-source` tags where the lead came from; keep the value above for
   westromgroup.com pages so reporting stays clean.
