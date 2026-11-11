@@ -1,5 +1,12 @@
 # n8n middleware — import & wiring guide
 
+> **Topology changed 2026-11-11:** n8n now runs in *regular* mode as a single `main`
+> service (pinned `n8nio/n8n:2.44.4`) plus Postgres. The `worker` and `Redis` services
+> were removed to cut cost (~half the project's memory). Wherever this document says
+> "worker", read `main`; set env vars on `main` only. `main`'s `/home/node/.n8n` is still
+> ephemeral (its volume is mounted at `/data`, which n8n cannot write as a non-root user),
+> so the estimator index must be re-seeded after any `main` redeploy.
+
 The four workflow exports in `workflows/` are the entire server side (ADR-1).
 Authored against n8n 1.x node schemas on 2026-07-12. **[VERIFY-AT-BUILD]:
 smoke-import each JSON into the running n8n version before go-live; node
