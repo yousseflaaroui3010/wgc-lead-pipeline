@@ -1,5 +1,12 @@
 # Deploy / refresh the rent estimator (PRD-03) on Railway n8n
 
+> **Topology changed 2026-11-11:** n8n now runs in *regular* mode as a single `main`
+> service (pinned `n8nio/n8n:2.44.4`) plus Postgres. The `worker` and `Redis` services
+> were removed to cut cost (~half the project's memory). Wherever this document says
+> "worker", read `main`; set env vars on `main` only. `main`'s `/home/node/.n8n` is still
+> ephemeral (its volume is mounted at `/data`, which n8n cannot write as a non-root user),
+> so the estimator index must be re-seeded after any `main` redeploy.
+
 The estimator lives entirely in n8n (WF-1's "Compute estimate" node). The widget
 already renders the estimate shape (shipped in form v2), so **nothing new deploys
 to westromhub1** for this feature. Two moving parts on Railway:

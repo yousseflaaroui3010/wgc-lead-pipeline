@@ -23,12 +23,12 @@ else (WF-0 returns an empty token; WF-1 silently rejects with `reason: gateway`)
 3. In n8n, import `n8n/workflows/wf0-token.json` and `wf1-intake.json` (same
    IDs and paths; `wf-import-safety.test.mjs` guards that) and **Publish** both.
    With the secret still unset, behaviour is unchanged.
-4. **Before** step 5: the worker has no volume, so the redeploy in step 5 wipes
+4. **Before** step 5: since 2026-11-11 n8n is a single `main` service (no
+   worker). Its `/home/node/.n8n` is ephemeral, so the redeploy in step 5 wipes
    `/home/node/.n8n/wgc-estimate/segment-index.json` and the metrics file.
-   Either attach a Railway volume to the worker at `/home/node/.n8n` (preferred,
-   once), or plan to re-seed right after (`deploy-estimator.md` STEP 1).
+   Plan to re-seed right after (`deploy-estimator.md` STEP 1).
 5. Set `WGC_GATEWAY_SECRET` (the same value as the API's `N8N_GATEWAY_SECRET`)
-   on **both** the n8n `main` and `worker` services.
+   on the n8n `main` service.
 6. Verify:
    - `curl -s https://main-production-bf72.up.railway.app/webhook/d043c102d78e/token`
      → empty body (locked).
@@ -39,5 +39,5 @@ else (WF-0 returns an empty token; WF-1 silently rejects with `reason: gateway`)
 
 ## Rollback
 
-Delete `WGC_GATEWAY_SECRET` from main and worker. The webhooks are open again
+Delete `WGC_GATEWAY_SECRET` from `main`. The webhooks are open again
 and the gateway keeps working (it still sends the header; n8n ignores it).

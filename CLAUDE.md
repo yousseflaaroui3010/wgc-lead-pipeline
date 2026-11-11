@@ -7,8 +7,8 @@ PRD-02 v1.1 §E (canonical lead schema v1.0) and TD-1..TD-4 in
 ## Hard rules
 - Canonical schema v1.0 and TD-1..TD-4 are locked; changes need PM sign-off.
 - No lead database of ours (ADR-5).
-- CRM config is ENV-ONLY, on BOTH the n8n main and worker services
-  (DECISIONS 2026-08-18). ADR-4's intent stands (one documented home for CRM
+- CRM config is ENV-ONLY, on the n8n `main` service (DECISIONS 2026-08-18;
+  since 2026-11-11 n8n is single-service regular mode — no worker, no Redis). ADR-4's intent stands (one documented home for CRM
   specifics: `n8n/mapping/leadsimple-map.json`) but its mechanism is dead —
   that file is REFERENCE ONLY and is not read at runtime. It was bind-mounted
   from the abandoned VPS design; Railway has no bind mounts, so it never
