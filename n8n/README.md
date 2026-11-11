@@ -2,7 +2,7 @@
 
 > **Topology changed 2026-11-11:** n8n now runs in *regular* mode as a single `main`
 > service (pinned `n8nio/n8n:2.44.4`) plus Postgres. The `worker` and `Redis` services
-> were removed to cut cost (~half the project's memory). Wherever this document says
+> were removed (measured: n8n memory ~0.85 GB -> ~0.69 GB, two fewer services). Wherever this document says
 > "worker", read `main`; set env vars on `main` only. `main`'s `/home/node/.n8n` is still
 > ephemeral (its volume is mounted at `/data`, which n8n cannot write as a non-root user),
 > so the estimator index must be re-seeded after any `main` redeploy.
