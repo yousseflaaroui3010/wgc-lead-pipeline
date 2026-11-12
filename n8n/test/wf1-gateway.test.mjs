@@ -110,6 +110,25 @@ test('WF-1: the HMAC token is still required behind the gateway (defense in dept
   assert.equal(out.reason, 'token');
 });
 
+test('WF-1: a gateway-verified lead is accepted even after the n8n token would have expired (durable queue)', () => {
+  // Header Auth on the webhook (no env secret): the gateway header is present.
+  const viaHeader = { 'x-wgc-gateway': GW, 'x-wgc-client-ip': '203.0.113.9', 'x-wgc-client-ua': 'Real Browser' };
+  const queued = runNode(WF1, { json: { body: lead({ token: mintToken(5 * 3600_000), gateway_verified: true }), headers: viaHeader }, env: { WGC_HMAC_SECRET: HMAC } });
+  assert.equal(queued.out.bot, false);
+  // Same flag without the gateway header is NOT honoured.
+  const direct = runNode(WF1, { json: { body: lead({ token: 'forged', gateway_verified: true }), headers: {} }, env: { WGC_HMAC_SECRET: HMAC } });
+  assert.equal(direct.out.reason, 'token');
+  // With the env secret set, a wrong header still fails the gateway check.
+  const wrong = runNode(WF1, { json: { body: lead({ gateway_verified: true }), headers: { 'x-wgc-gateway': 'x'.repeat(40) } }, env: { WGC_HMAC_SECRET: HMAC, WGC_GATEWAY_SECRET: GW } });
+  assert.equal(wrong.out.reason, 'gateway');
+});
+
+test('WF-1: the webhook itself requires the gateway header (Header Auth credential, not an env var)', () => {
+  const hook = load('wf1-intake.json').nodes.find((n) => n.type === 'n8n-nodes-base.webhook');
+  assert.equal(hook.parameters.authentication, 'headerAuth');
+  assert.equal(hook.credentials.httpHeaderAuth.name, 'WGC gateway');
+});
+
 test('WF-1: the dedupe buffer is bounded under a flood of unique IDs', () => {
   const now = Date.now();
   const staticData = { seen: Array.from({ length: 6000 }, (_, i) => ({ id: 'id-' + i, t: now })) };
