@@ -6,7 +6,10 @@ PRD-02 v1.1 §E (canonical lead schema v1.0) and TD-1..TD-4 in
 
 ## Hard rules
 - Canonical schema v1.0 and TD-1..TD-4 are locked; changes need PM sign-off.
-- No lead database of ours (ADR-5).
+- ADR-5 ("no lead database of ours") is SUPERSEDED (owner decision, 2026-11-12):
+  the wgcassetguide API stores every accepted lead permanently in its private
+  Postgres (`lead` table) and a worker delivers it to WF-1 with retries, so a
+  lead is never lost when n8n is down. WF-1 dedupes on submission_id.
 - CRM config is ENV-ONLY, on the n8n `main` service (DECISIONS 2026-08-18;
   since 2026-11-11 n8n is single-service regular mode — no worker, no Redis). ADR-4's intent stands (one documented home for CRM
   specifics: `n8n/mapping/leadsimple-map.json`) but its mechanism is dead —
