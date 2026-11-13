@@ -33,7 +33,7 @@ PRD-02 v1.1 §E (canonical lead schema v1.0) and TD-1..TD-4 in
   `public/embed.js` (that is the copy production serves).
 
 ## Commands
-- `npm test` — 154 tests (validation matrix, payload contract, a11y,
+- `npm test` — 156 tests (validation matrix, payload contract, a11y,
   estimator parity, and WF-2 CRM delivery)
 - `npm run build` — esbuild → `widget/dist/embed.js` + gzip size gate
 - `npm run check` — both; must pass before any commit
