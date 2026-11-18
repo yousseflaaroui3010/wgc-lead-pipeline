@@ -91,7 +91,8 @@ test('a missing credential is REPORTED, not swallowed (the four-week silent fail
   assert.equal(j.delivered_api, false);
   assert.match(j.crm_error, /LEADSIMPLE_REST_KEY/, 'names the variable');
   assert.match(j.crm_error, /LEADSIMPLE_API_KEY/, 'and the name Railway already uses');
-  assert.match(j.crm_error, /both the n8n main and worker/i, 'says where to set it');
+  assert.match(j.crm_error, /the n8n main service/i, 'says where to set it');
+  assert.doesNotMatch(j.crm_error, /worker/i, 'n8n has had no worker since 2026-11-11');
   assert.notEqual(j.crm_error, '', 'a non-empty reason is what drives the alert');
 });
 
@@ -311,7 +312,10 @@ for (const [status, label] of [[429, 'rate limited'], [500, 'server error'], [50
       },
     });
     assert.equal(posts, 3, 'three POST attempts');
-    assert.deepEqual(delays, [2000, 8000], 'backs off 2s then 8s, no sleep after the last try');
+    const expected = status === 429 ? [60000, 60000] : [2000, 8000];
+    assert.deepEqual(delays, expected, status === 429
+      ? 'a 429 with no Retry-After waits out the 1-minute window'
+      : 'backs off 2s then 8s, no sleep after the last try');
     assert.equal(j.delivered_api, false);
     assert.doesNotMatch(j.crm_error, /permanent/);
   });
@@ -658,4 +662,144 @@ test('no runtime read of the phantom bind-mount path survives in executable code
     'the file path may only be referenced in the comment that explains the history',
   );
   assert.ok(!/require\(['"]fs['"]\)/.test(executable), 'no filesystem dependency at all');
+});
+
+// --- the error shape n8n's task runner actually delivers -------------------
+// 2026-11-18 incident: a LeadSimple 429 produced the alert
+// "POST /deals failed: Request failed with status code 429" with NO "(HTTP 429)".
+// The Code node runs in n8n's task runner (N8N_RUNNERS_ENABLED=true), and a
+// helper's thrown error reaches it as JSON.parse(JSON.stringify(axiosError)):
+// only message/name/stack/config/code/status survive. Every stub above throws
+// an in-process error with e.response, which is why this suite was green while
+// production read the status as 0. The stubs below model the real runner.
+
+// What the runner hands the Code node for a thrown axios error, verified by
+// serializing a real axios 1.20 (n8n 2.44.4's version) 429 error.
+const wireError = (status) => Object.assign(Object.create(null), {
+  message: 'Request failed with status code ' + status,
+  name: 'AxiosError',
+  code: status >= 500 ? 'ERR_BAD_RESPONSE' : 'ERR_BAD_REQUEST',
+  status,
+});
+
+// A helper that behaves like n8n 2.44 behind the runner: a non-2xx THROWS the
+// stripped wire error unless the caller set ignoreHttpStatusErrors, in which
+// case it RETURNS the full response, headers and body included.
+const runnerHttp = (status, headers, body, seen = []) => async (o) => {
+  seen.push(o);
+  if (o.ignoreHttpStatusErrors) return { statusCode: status, headers, body };
+  throw wireError(status);
+};
+
+const RATE_BODY = { error: 'Rate limit exceeded for records, please wait 1 minute before retrying' };
+
+test('the POST asks n8n to return non-2xx responses instead of throwing them', async () => {
+  const seen = [];
+  await runCrm({ payload: LEAD, env: FULL_ENV, delays: [], httpRequest: async (o) => { seen.push(o); return created()(o); } });
+  const post = seen.find((o) => o.method === 'POST');
+  assert.equal(post.ignoreHttpStatusErrors, true, 'otherwise status, headers and body die at the runner boundary');
+  assert.equal(post.returnFullResponse, true);
+});
+
+test('a 429 behind the task runner is read as a 429, honours Retry-After, and skips the read-back', async () => {
+  const seen = [];
+  const delays = [];
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays,
+    httpRequest: runnerHttp(429, { 'x-ratelimit-retry-after': '45' }, RATE_BODY, seen),
+  });
+  assert.match(j.crm_error, /\(HTTP 429\)/, 'the 2026-11-18 alert had no status at all');
+  assert.match(j.crm_error, /Rate limit exceeded for records/, 'and now carries LeadSimple\'s own reason');
+  assert.deepEqual(delays, [45000, 45000], 'the server\'s wait, not 2s/8s inside the same window');
+  assert.equal(seen.filter((o) => o.method === 'GET').length, 0, 'a 429 never wrote, so no read-back quota spent');
+  assert.equal(seen.filter((o) => o.method === 'POST').length, 3);
+});
+
+test('a 429 that clears on the second attempt delivers the lead', async () => {
+  let posts = 0;
+  const delays = [];
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays,
+    httpRequest: async (o) => {
+      posts++;
+      if (posts === 1) return { statusCode: 429, headers: {}, body: RATE_BODY };
+      return { statusCode: 201, headers: {}, body: { data: { id: 'deal-after-wait', link: 'L' } } };
+    },
+  });
+  assert.equal(j.delivered_api, true);
+  assert.equal(j.crm_deal_id, 'deal-after-wait');
+  assert.deepEqual(delays, [60000], 'no Retry-After: wait out the whole 1-minute window once');
+  assert.equal(j.crm_error, '');
+});
+
+test('a 400 returned (not thrown) is still permanent and still legible', async () => {
+  let calls = 0;
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays: [],
+    httpRequest: async () => { calls++; return { statusCode: 400, headers: {}, body: { error: 'deal[pipeline_id] is missing' } }; },
+  });
+  assert.equal(calls, 1);
+  assert.match(j.crm_error, /\(HTTP 400\): deal\[pipeline_id\] is missing \[permanent, not retried\]/);
+});
+
+test('a wire-shaped error that still slips through keeps its status (e.status)', async () => {
+  const delays = [];
+  const seen = [];
+  const j = await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays,
+    // Ignores the flag on purpose: if a future n8n drops ignoreHttpStatusErrors,
+    // the status must still not collapse to 0.
+    httpRequest: async (o) => { seen.push(o.method); throw wireError(429); },
+  });
+  assert.match(j.crm_error, /\(HTTP 429\)/);
+  assert.deepEqual(delays, [60000, 60000]);
+  assert.equal(seen.includes('GET'), false);
+});
+
+test('a huge Retry-After is capped so the run stays inside the 300s runner timeout', async () => {
+  const delays = [];
+  await runCrm({
+    payload: LEAD,
+    env: FULL_ENV,
+    delays,
+    httpRequest: runnerHttp(429, { 'x-ratelimit-retry-after': '3600' }, RATE_BODY),
+  });
+  assert.deepEqual(delays, [90000, 90000]);
+  const worstCase = delays.reduce((a, b) => a + b, 0) + 3 * 10000;
+  assert.ok(worstCase < 300000, 'worst case ' + worstCase + 'ms must fit N8N_RUNNERS_TASK_TIMEOUT');
+});
+
+test('the alert no longer sends people to a worker service that does not exist', () => {
+  const alert = loadWf().nodes.find((n) => n.name === 'Alert: CRM delivery failed');
+  assert.doesNotMatch(alert.parameters.jsonBody, /worker/i);
+});
+
+// --- repeat requests: deal yes, second guide no (2026-11-18) ---------------
+test('WF-2 sends the guide only when send_guide is not false', () => {
+  const cond = loadWf().nodes.find((n) => n.name === 'Ebook requested?').parameters.conditions.boolean[0].value1;
+  const evalCond = (payload) => new Function('$json', 'return (' + cond.replace(/^=\{\{|\}\}$/g, '') + ');')({ payload });
+  assert.equal(evalCond({ ebook_opt_in: true }), true, 'legacy payload without the field still gets its guide');
+  assert.equal(evalCond({ ebook_opt_in: true, send_guide: true }), true);
+  assert.equal(evalCond({ ebook_opt_in: true, send_guide: false }), false, 'a repeat within 24h gets no second email');
+  assert.equal(evalCond({ ebook_opt_in: false, send_guide: true }), false, 'never without consent');
+});
+
+test('a repeat request still creates the deal, and the deal says the guide was not re-sent', async () => {
+  let body = '';
+  const j = await runCrm({
+    payload: Object.assign({}, LEAD, { send_guide: false }),
+    env: FULL_ENV,
+    httpRequest: async (o) => { body = o.body; return created()(o); },
+  });
+  assert.equal(j.delivered_api, true);
+  const comments = pairs(body).find(([k]) => k === 'deal[comments]')[1];
+  assert.match(comments, /Free guide requested: yes \(not re-sent/);
 });
