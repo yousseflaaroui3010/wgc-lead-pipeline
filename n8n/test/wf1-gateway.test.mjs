@@ -143,3 +143,28 @@ test('WF-1: duplicates are still rejected', () => {
   assert.equal(runNode(WF1, { json: { body, headers: {} }, env, staticData }).out.bot, false);
   assert.equal(runNode(WF1, { json: { body, headers: {} }, env, staticData }).out.reason, 'duplicate');
 });
+
+// 2026-11-18: a repeat guide request used to reach n8n with the email blanked,
+// so a returning owner never got a CRM deal. The gateway now sends
+// send_guide:false instead, and the contact stays.
+test('WF-1: send_guide:false from the gateway keeps the contact and only skips the guide', () => {
+  const env = { WGC_HMAC_SECRET: HMAC, WGC_GATEWAY_SECRET: GW };
+  const { out } = runNode(WF1, {
+    json: { body: lead({ send_guide: false }), headers: { 'x-wgc-gateway': GW, 'x-wgc-client-ip': '203.0.113.9', 'x-wgc-client-ua': 'UA' } },
+    env,
+  });
+  assert.equal(out.bot, false);
+  assert.equal(out.payload.email, 'owner@example.com', 'the contact must reach WF-2');
+  assert.equal(out.payload.ebook_opt_in, true, 'consent was given');
+  assert.ok(out.payload.consent, 'and its evidence is kept');
+  assert.equal(out.payload.send_guide, false);
+});
+
+test('WF-1: send_guide defaults to true with consent and false without', () => {
+  const env = { WGC_HMAC_SECRET: HMAC, WGC_GATEWAY_SECRET: GW };
+  const h = { 'x-wgc-gateway': GW, 'x-wgc-client-ip': '203.0.113.9', 'x-wgc-client-ua': 'UA' };
+  assert.equal(runNode(WF1, { json: { body: lead(), headers: h }, env }).out.payload.send_guide, true);
+  const noOpt = runNode(WF1, { json: { body: lead({ ebook_opt_in: false, email: '', consent: null }), headers: h }, env }).out;
+  assert.equal(noOpt.payload.send_guide, false);
+  assert.equal(noOpt.payload.email, '');
+});

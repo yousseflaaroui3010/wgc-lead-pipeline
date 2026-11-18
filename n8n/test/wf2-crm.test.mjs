@@ -781,3 +781,25 @@ test('the alert no longer sends people to a worker service that does not exist',
   const alert = loadWf().nodes.find((n) => n.name === 'Alert: CRM delivery failed');
   assert.doesNotMatch(alert.parameters.jsonBody, /worker/i);
 });
+
+// --- repeat requests: deal yes, second guide no (2026-11-18) ---------------
+test('WF-2 sends the guide only when send_guide is not false', () => {
+  const cond = loadWf().nodes.find((n) => n.name === 'Ebook requested?').parameters.conditions.boolean[0].value1;
+  const evalCond = (payload) => new Function('$json', 'return (' + cond.replace(/^=\{\{|\}\}$/g, '') + ');')({ payload });
+  assert.equal(evalCond({ ebook_opt_in: true }), true, 'legacy payload without the field still gets its guide');
+  assert.equal(evalCond({ ebook_opt_in: true, send_guide: true }), true);
+  assert.equal(evalCond({ ebook_opt_in: true, send_guide: false }), false, 'a repeat within 24h gets no second email');
+  assert.equal(evalCond({ ebook_opt_in: false, send_guide: true }), false, 'never without consent');
+});
+
+test('a repeat request still creates the deal, and the deal says the guide was not re-sent', async () => {
+  let body = '';
+  const j = await runCrm({
+    payload: Object.assign({}, LEAD, { send_guide: false }),
+    env: FULL_ENV,
+    httpRequest: async (o) => { body = o.body; return created()(o); },
+  });
+  assert.equal(j.delivered_api, true);
+  const comments = pairs(body).find(([k]) => k === 'deal[comments]')[1];
+  assert.match(comments, /Free guide requested: yes \(not re-sent/);
+});
